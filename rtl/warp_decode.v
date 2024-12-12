@@ -5,23 +5,46 @@
 `define PIPE_XMUL   4'b0010
 `define PIPE_XDIV   4'b0011
 
+module warp_predecode (
+    input  wire [63:0] i_buffer,
+    // 0 = u[31:0]
+    // 1 = u[47:16]
+    // 2 = u[63:32]
+    // 3 = c[15:0]
+    // 4 = c[31:16]
+    // 5 = c[47:32]
+    // 6 = c[63:48]
+    output wire [6:0]  o_pick,
+);
+    wire [1:0] opcode [3:0];
+    assign opcode[0] = i_buffer[1:0];
+    assign opcode[1] = i_buffer[17:16];
+    assign opcode[2] = i_buffer[33:32];
+    assign opcode[3] = i_buffer[49:48];
+
+    wire [3:0] compressed = {opcode[3] != 2'b11, opcode[opcode[2] != 2'b11], opcode[1] != 2'b11, opcode[0] != 2'b11};
+endmodule
+
 module warp_udecode (
     input  wire [31:0] i_inst,
     output wire        o_valid,
-    output wire [4:0]  o_rs1_addr,
-    output wire [4:0]  o_rs2_addr,
-    output wire [4:0]  o_rd_addr,
+    // [4:0]   = rs1_addr
+    // [9:5]   = rs2_addr
+    // [14:10] = rd_addr
+    output wire [14:0] o_raddr,
     output wire [31:0] o_imm,
     output wire [3:0]  o_pipeline,
-    output wire [1:0]  o_xarith_opsel,
-    output wire        o_xarith_sub,
-    output wire        o_xarith_unsigned,
-    output wire        o_xarith_cmp_mode,
-    output wire        o_xarith_branch_equal,
-    output wire        o_xarith_branch_invert,
-    output wire [2:0]  o_xlogic_opsel,
-    output wire        o_xlogic_invert,
-    output wire [1:0]  o_xlogic_sll
+    // [1:0] = opsel
+    // [2]   = sub
+    // [3]   = unsigned
+    // [4]   = cmp_mode
+    // [5]   = branch_equal
+    // [6]   = branch_invert
+    output wire [6:0]  o_xarith,
+    // [2:0] = opsel
+    // [3]   = invert
+    // [5:4] = sll
+    output wire [5:0]  o_xlogic
 );
     wire [4:0] opcode = i_inst[6:2];
     wire [4:0] rs1    = i_inst[19:15];
@@ -270,17 +293,18 @@ module warp_udecode (
         endcase
     end
 
+    assign o_raddr = {rd, rs2, rs1};
     assign o_imm = imm;
     assign o_pipeline = pipeline;
-    assign o_xarith_opsel = xarith_opsel;
-    assign o_xarith_sub = xarith_sub;
-    assign o_xarith_unsigned = xarith_unsigned;
-    assign o_xarith_cmp_mode = xarith_cmp_mode;
-    assign o_xarith_branch_equal = xarith_branch_equal;
-    assign o_xarith_branch_invert = xarith_branch_invert;
-    assign o_xlogic_opsel = xlogic_opsel;
-    assign o_xlogic_invert = xlogic_invert;
-    assign o_xlogic_sll = xlogic_sll;
+    assign o_xarith[1:0] = xarith_opsel;
+    assign o_xarith[2]   = xarith_sub;
+    assign o_xarith[3]   = xarith_unsigned;
+    assign o_xarith[4]   = xarith_cmp_mode;
+    assign o_xarith[5]   = xarith_branch_equal;
+    assign o_xarith[6]   = xarith_branch_invert;
+    assign o_xlogic[2:0] = xlogic_opsel;
+    assign o_xlogic[3]   = xlogic_invert;
+    assign o_xlogic[5:4] = xlogic_sll;
 endmodule
 
 module warp_cdecode (
@@ -336,4 +360,5 @@ module warp_cdecode (
         xlogic_opsel = 3'bxxx;
         xlogic_invert = 1'bx;
         xlogic_sll = 2'bxx;
+    end
 endmodule
