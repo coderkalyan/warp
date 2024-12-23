@@ -8,7 +8,7 @@
 `define XLOGIC_OP_OR  3'b001
 `define XLOGIC_OP_XOR 3'b010
 `define XLOGIC_OP_SHF 3'b011
-`define XLOGIC_OP_ADR 3'b100
+`define XLOGIC_OP_SLA 3'b100
 `define XLOGIC_OP_CLZ 3'b101
 `define XLOGIC_OP_CTZ 3'b110
 `define XLOGIC_OP_POP 3'b111
@@ -81,9 +81,10 @@ module warp_xlogic (
     // xor with conditional invert of result
     wire [63:0] xor_result = (i_op1 ^ i_op2) ^ {64{i_invert}};
 
+    // shift left 2 bits + add (address generation)
     wire [63:0] sl1 = i_sll[1] ? {i_op1[61:0], 2'b00} : i_op1;
     wire [63:0] sl0 = i_sll[0] ? {sl1[62:0], 1'b0} : sl1;
-    wire [63:0] adr_result = sl0 + i_op2;
+    wire [63:0] sla_result = sl0 + i_op2;
 
     reg [63:0] result;
     always @(*) begin
@@ -93,8 +94,8 @@ module warp_xlogic (
             `XLOGIC_OP_AND: result = and_result;
             `XLOGIC_OP_OR:  result = or_result;
             `XLOGIC_OP_XOR: result = xor_result;
-            // `XLOGIC_OP_SHF: result = shift_result;
-            `XLOGIC_OP_ADR: result = adr_result;
+            `XLOGIC_OP_SHF: result = shift_result;
+            `XLOGIC_OP_SLA: result = sla_result;
             default: result = 64'hx;
         endcase
     end
@@ -102,6 +103,9 @@ module warp_xlogic (
     assign o_result = result;
 endmodule
 
+// TODO:while the interface to this register file is
+// (mostly) correct, it currently will synthesize very
+// poorly to FPGAs and needs to be internally reworked
 module warp_xrf (
     input  wire        i_clk,
     input  wire [4:0]  i_rs1_addr,
@@ -125,18 +129,18 @@ module warp_xrf (
         begin
             rs1_rdata <= file[~i_rs1_addr];
             rs2_rdata <= file[~i_rs2_addr];
-            // rs3_rdata <= file[~i_rs3_addr];
-            // rs4_rdata <= file[~i_rs4_addr];
+            rs3_rdata <= file[~i_rs3_addr];
+            rs4_rdata <= file[~i_rs4_addr];
 
             if (i_rd1_wen)
                 file[~i_rd1_addr] <= i_rd1_wdata;
-            // if (i_rd2_wen)
-            //     file[~i_rd2_addr] <= i_rd2_wdata;
+            if (i_rd2_wen)
+                file[~i_rd2_addr] <= i_rd2_wdata;
         end
     end
 
     assign o_rs1_rdata = rs1_rdata;
     assign o_rs2_rdata = rs2_rdata;
-    // assign o_rs3_rdata = rs3_rdata;
-    // assign o_rs4_rdata = rs4_rdata;
+    assign o_rs3_rdata = rs3_rdata;
+    assign o_rs4_rdata = rs4_rdata;
 endmodule
