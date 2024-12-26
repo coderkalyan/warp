@@ -1,0 +1,21 @@
+[tasks]
+bmc
+cover
+
+[options]
+bmc: mode bmc
+cover: mode cover
+depth 15
+
+[engines]
+smtbmc z3
+
+[script]
+verilog_defines -DWARP_FORMAL
+read -formal warp_fetch.v warp_integer.v warp_decode.v
+prep -top warp_fetch
+
+[files]
+rtl/warp_fetch.v
+rtl/warp_decode.v
+rtl/warp_integer.v

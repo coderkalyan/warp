@@ -7,34 +7,6 @@ module warp_hart #(
     input  wire i_rst_n
 );
     // instruction fetch
-    reg [63:0] pc, next_pc;
-    always @(posedge i_clk, negedge i_rst_n) begin
-        if (!i_rst_n)
-            pc <= RESET_ADDR;
-        else
-            pc <= next_pc;
-    end
-
-    wire if_stall;
-    // TODO: actually calculate this properly
-    always @(*) begin
-        next_pc = pc + 64'h4;
-    end
-
-    // TODO: implement instruction cache
-    wire [63:0] buffer;
-    wire buffer_valid = 1'b1;
-
-    // predecode logic (pick instructions)
-    wire [31:0] uinst0, uinst1;
-    wire [15:0] cinst0, cinst1;
-    wire [1:0] bsel0, bsel1;
-    warp_predecode predeccode (
-        .i_buffer(buffer),
-        .o_uinst0(uinst0), .o_uinst1(uinst1),
-        .o_cinst0(cinst0), .o_cinst1(cinst1),
-        .o_sel0(bsel0), .o_sel1(bsel1)
-    );
 
     // IF/ID pipeline barrier
     reg [31:0] if_uinst0, if_uinst1;
