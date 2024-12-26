@@ -5,76 +5,42 @@
 `define PIPE_XMUL   4'b0010
 `define PIPE_XDIV   4'b0011
 
-module warp_predecode (
+module warp_pick (
     input  wire [63:0] i_buffer,
-    output wire [31:0] o_uinst0,
-    output wire [31:0] o_uinst1,
-    output wire [15:0] o_cinst0,
-    output wire [15:0] o_cinst1,
-    output wire [1:0]  o_sel0,
-    output wire [1:0]  o_sel1
+    output wire [1:0]  o_compressed
 );
-    wire [1:0] opcode [3:0];
+    wire [1:0] opcode [0:2];
     assign opcode[0] = i_buffer[1:0];
     assign opcode[1] = i_buffer[17:16];
     assign opcode[2] = i_buffer[33:32];
-    assign opcode[3] = i_buffer[49:48];
-    wire [31:0] u0 = i_buffer[31:0];
-    wire [31:0] u1 = i_buffer[47:16];
-    wire [31:0] u2 = i_buffer[63:22];
-    wire [15:0] c0 = i_buffer[15:0];
-    wire [15:0] c1 = i_buffer[31:16];
-    wire [15:0] c2 = i_buffer[47:32];
-    wire [15:0] c3 = i_buffer[63:48];
-    wire [3:0] compressed = {opcode[3] != 2'b11, opcode[opcode[2] != 2'b11], opcode[1] != 2'b11, opcode[0] != 2'b11};
 
-    // 0 = u[31:0]
-    // 1 = u[47:16]
-    // 2 = u[63:32]
-    // 3 = c[15:0]
-    // 4 = c[31:16]
-    // 5 = c[47:32]
-    wire [5:0] pick;
-    assign pick[0] = !compressed[0];
-    assign pick[3] =  compressed[0];
-    assign pick[1] = pick[3] && !compressed[1];
-    assign pick[4] = pick[3] &&  compressed[1];
-    assign pick[2] = (pick[0] || pick[4]) && !compressed[2];
-    assign pick[5] = (pick[0] || pick[4]) &&  compressed[2];
+    wire [1:0] compressed;
+    assign compressed[0] = opcode[0] != 2'b11;
+    assign compressed[1] = (compressed[0] ? opcode[1] : opcode[2]) != 2'b11;
 
-    reg [31:0] uinst0, uinst1;
-    reg [15:0] cinst0, cinst1;
-    reg [1:0] sel0, sel1;
-    always @(*) begin
-        casex (pick[2:0])
-            3'b001: begin uinst0 = u0; end
-            3'b010: begin uinst0 = u1; end
-            3'b101: begin uinst0 = u0; uinst1 = u2; end
-            default: begin uinst0 = 32'hx; uinst1 = 32'hx; end
-        endcase
+    assign o_compressed = compressed;
+endmodule
 
-        casex (pick[5:3])
-            3'b001: begin cinst0 = c0; end
-            3'b011: begin cinst0 = c0; cinst1 = c1; end
-            3'b100: begin cinst0 = c2; end
-            default: begin cinst0 = 32'hx; cinst1 = 32'hx; end
-        endcase
+module warp_predecode (
+    input  wire [31:0] i_inst,
+    input  wire        i_compressed,
+    output wire        o_branch
+);
+    wire op_branch = i_inst[6:0] == 7'b1100011;
+    wire op_jal    = i_inst[6:0] == 7'b1101111;
+    wire op_jalr   = i_inst[6:0] == 7'b1100111;
+    wire op_cj     = i_inst[1:0] == 2'b01 && i_inst[15:13] == 3'b101;
+    wire op_cjal   = i_inst[1:0] == 2'b01 && i_inst[15:13] == 3'b001;
+    wire op_cjr    = i_inst[1:0] == 2'b10 && i_inst[15:12] == 4'b1000 && i_inst[6:2] == 5'd0 && i_inst[11:7] != 5'd0;
+    wire op_cjalr  = i_inst[1:0] == 2'b10 && i_inst[15:12] == 4'b1001 && i_inst[6:2] == 5'd0 && i_inst[11:7] != 5'd0;
+    wire op_cbeqz  = i_inst[1:0] == 2'b01 && i_inst[15:13] == 3'b110;
+    wire op_cbnez  = i_inst[1:0] == 2'b01 && i_inst[15:13] == 3'b111;
 
-        case (pick)
-            6'b000101: begin sel0 = 2'd0; sel1 = 2'd1; end
-            6'b100001: begin sel0 = 2'd0; sel1 = 2'd2; end
-            6'b001010: begin sel0 = 2'd2; sel1 = 2'd0; end
-            6'b011000: begin sel0 = 2'd2; sel1 = 2'd3; end
-            default: begin sel0 = 2'dx; sel1 = 2'dx; end
-        endcase
-    end
+    wire op_ubranch = op_branch || op_jal || op_jalr;
+    wire op_cbranch = op_cj || op_cjal || op_cjr || op_cjalr || op_cbeqz || op_cbnez;
+    wire branch = i_compressed ? op_cbranch : op_ubranch;
 
-    assign o_uinst0 = uinst0;
-    assign o_uinst1 = uinst1;
-    assign o_cinst0 = cinst0;
-    assign o_cinst1 = cinst1;
-    assign sel0 = o_sel0;
-    assign sel1 = o_sel1;
+    assign o_branch = branch;
 endmodule
 
 module warp_udecode (
@@ -414,3 +380,5 @@ module warp_cdecode (
         xlogic_sll = 2'bxx;
     end
 endmodule
+
+`default_nettype wire
