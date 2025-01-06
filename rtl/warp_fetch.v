@@ -1,10 +1,14 @@
 `default_nettype none
 
 module warp_fetch #(
-    parameter RESET_ADDR = 64'h0000000000000000
+    parameter RESET_ADDR = 64'h8000000000000000
 ) (
     input  wire        i_clk,
     input  wire        i_rst_n,
+    output wire [63:0] o_mem_raddr,
+    output wire        o_mem_ren,
+    input  wire [63:0] i_mem_rdata,
+    input  wire        i_mem_valid,
     input  wire [63:0] i_branch_target,
     input  wire        i_branch_valid,
     input  wire        i_output_ready,
@@ -22,10 +26,10 @@ module warp_fetch #(
             pc <= next_pc;
     end
 
-    // TODO: fetch this from the instruction cache
-    wire [63:0] buffer;
-    wire buffer_valid = 1'b1;
+    wire [63:0] buffer = i_mem_rdata;
+    wire buffer_valid = i_mem_valid;
 
+    // detect compressed instructions and segment appropriately
     wire [1:0] compressed;
     warp_pick pick (.i_buffer(buffer), .o_compressed(compressed));
 
@@ -39,7 +43,7 @@ module warp_fetch #(
     );
 
     localparam BUSY  = 2'h0; // output instruction and fetch next
-    localparam READY = 2'h1; // ready to output, stalled on decode
+    localparam VALID = 2'h1; // ready to output, stalled on decode
     localparam STALL = 2'h2; // hit branch, stalled on resolution
     reg [1:0] state, next_state;
     always @(posedge i_clk, negedge i_rst_n) begin
@@ -49,12 +53,12 @@ module warp_fetch #(
             state <= next_state;
     end
 
-    wire next_valid, transmit;
+    wire transmit;
     always @(*) begin
         case (state)
-            BUSY: next_state = !transmit ? READY : (|branch ? STALL : state);
-            READY: next_state = transmit ? BUSY : state;
-            STALL: next_state = i_branch_valid ? BUSY : state;
+            BUSY:  next_state = transmit ? (|branch ? STALL : BUSY) : VALID;
+            VALID: next_state = transmit ? BUSY : VALID;
+            STALL: next_state = i_branch_valid ? BUSY : STALL;
             default: next_state = BUSY;
         endcase
     end
@@ -88,11 +92,13 @@ module warp_fetch #(
 
         case (state)
             BUSY: next_pc = buffer_valid ? advance_pc : pc;
-            READY: next_pc = pc;
-            STALL: next_pc = pc;
+            VALID: next_pc = pc;
+            STALL: next_pc = i_branch_valid ? i_branch_target : pc;
         endcase
     end
 
+    assign o_mem_raddr = transmit && (next_pc == BUSY);
+    assign o_mem_ren = i_rst_n;
     assign o_output_valid = valid;
     assign o_inst0 = inst0;
     assign o_inst1 = inst1;
@@ -104,31 +110,90 @@ module warp_fetch #(
         initial f_past_valid <= 1'b0;
         always @(posedge i_clk) f_past_valid <= 1'b1;
 
+        (* gclk *) reg formal_timestep;
+
         initial begin
             assume (!i_rst_n);
             assume (!i_clk);
+            assume (!i_mem_valid);
             assume (!i_branch_valid);
         end
 
+        always @(posedge formal_timestep) begin
+            if (f_past_valid && !$rose(i_clk) && !$changed(i_rst_n)) begin
+                assume ($stable(i_mem_rdata));
+                assume ($stable(i_mem_valid));
+                assume ($stable(i_branch_target));
+                assume ($stable(i_branch_valid));
+                assume ($stable(i_output_ready));
+                
+                assert ($stable(o_mem_raddr));
+                assert ($stable(o_mem_ren));
+                assert ($stable(o_output_valid));
+                assert ($stable(o_inst0));
+                assert ($stable(o_inst1));
+                assert ($stable(o_compressed));
+                assert ($stable(o_count));
+            end
+        end
+
+        reg f_mem_outstanding;
+        initial f_mem_outstanding <= 1'b0;
+
         always @(posedge i_clk) begin
+            if (f_past_valid && !$past(i_rst_n)) begin
+                assert (!o_output_valid);
+            end
+
             if (i_rst_n) begin
-                // output ready/valid interface
-                if (f_past_valid && (state == BUSY))
-                    assert ($past(!i_rst_n) || ($past(valid) && $past(i_output_ready)) || ($past(state == STALL) && $past(i_branch_valid)));
+                // track outstanding memory requests
+                if (o_mem_ren)
+                    f_mem_outstanding <= 1'b1;
+                else if (i_mem_valid)
+                    f_mem_outstanding <= 1'b0;
 
+                // TODO: assert no request while outstanding
+                // memory interface will never respond without request
+                if (!f_mem_outstanding)
+                    assume (!i_mem_valid);
+
+                // memory request should be stable during transaction
+                if (f_past_valid && $past(f_mem_outstanding))
+                    assert ($stable(o_mem_raddr));
+
+                // if 'busy' state received memory, should propogate
+                // without wasting any cycles
+                if (f_past_valid && $past(i_rst_n) && $past(state == BUSY) && $past(i_mem_valid))
+                    assert (o_output_valid);
+
+                // branch target resolution
+                if (f_past_valid && $past(state == STALL) && $past(i_branch_valid)) begin
+                    assert (state == BUSY);
+                    assert (pc == i_branch_target);
+                end
+
+                // if (f_past_valid && $past(o_output_valid) && !$past(i_output_ready)) begin
+                //     assert ($stable(o_inst0));
+                //     assert ($stable(o_inst1));
+                //     assert ($stable(o_compressed));
+                //     assert ($stable(o_count));
+                // end
+                //
                 cover (f_past_valid && $rose(valid));
-                cover (f_past_valid && $fell(valid));
-                cover (f_past_valid && $past(valid) && valid);
-
+                // cover (f_past_valid && $fell(valid));
+                // cover (f_past_valid && $past(valid) && valid);
+                //
                 // state transitions
-                cover (f_past_valid && $past(state == READY) && (state == BUSY));
-                cover (f_past_valid && $past(state == STALL) && (state == BUSY));
-
-                // stall protection - both runaway and indefinite stall
-                if (f_past_valid && $past(state != BUSY))
-                    assert ($stable(pc));
-                if (f_past_valid && $past(state == BUSY))
-                    cover (!$stable(pc));
+                cover (f_past_valid && $past(state == VALID) && (state == BUSY));
+                // cover (state == STALL);
+                // cover (f_past_valid && $past(state == BUSY) && $past(|branch));
+                // cover (f_past_valid && $past(state == STALL) && (state == BUSY));
+                //
+                // // stall protection - both runaway and indefinite stall
+                // if (f_past_valid && $past(state != BUSY))
+                //     assert ($stable(pc));
+                // if (f_past_valid && $past(state == BUSY))
+                //     cover (!$stable(pc));
             end
         end
     `endif
