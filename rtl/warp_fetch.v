@@ -75,6 +75,16 @@ module warp_fetch #(
         end
     end
 
+    `ifdef WARP_FORMAL
+    reg [63:0] f_hold_buffer;
+    always @(posedge i_clk, negedge i_rst_n) begin
+        if (!i_rst_n)
+            f_hold_buffer <= 64'h0;
+        else if (i_mem_valid)
+            f_hold_buffer <= buffer;
+    end
+    `endif
+
     // output instruction(s) and pipeline next request to cache
     // if valid (output ready and didn't hit a branch)
     localparam FETCH = 3'h0;
@@ -140,13 +150,13 @@ module warp_fetch #(
     always @(*) begin
         advance_pc = 64'hx;
 
-        casez ({branch, compressed})
-            4'b0000: advance_pc = pc + 64'h8;
-            4'b0001,
-            4'b0010: advance_pc = pc + 64'h6;
-            4'b0011: advance_pc = pc + 64'h4;
-            4'b1?0?: advance_pc = pc + 64'h4;
-            4'b1?1?: advance_pc = pc + 64'h2;
+        casez ({branch[0], compressed})
+            3'b000: advance_pc = pc + 64'h8;
+            3'b001,
+            3'b010: advance_pc = pc + 64'h6;
+            3'b011: advance_pc = pc + 64'h4;
+            3'b10?: advance_pc = pc + 64'h4;
+            3'b11?: advance_pc = pc + 64'h2;
         endcase
     end
 
@@ -184,6 +194,10 @@ module warp_fetch #(
         always @(posedge i_clk) f_past_valid <= 1'b1;
 
         (* gclk *) reg formal_timestep;
+        reg [7:0] f_cycle;
+        initial f_cycle <= 8'd0;
+        always @(posedge formal_timestep)
+            f_cycle <= f_cycle + 8'd1;
 
         initial begin
             assume (!i_rst_n);
@@ -235,6 +249,17 @@ module warp_fetch #(
                 f_mem_outstanding <= 1'b0;
         end
 
+        reg f_branch_outstanding;
+        initial f_branch_outstanding <= 1'b0;
+        always @(posedge i_clk, negedge i_rst_n) begin
+            if (!i_rst_n)
+                f_branch_outstanding <= 1'b0;
+            else if (next_state == RESOL)
+                f_branch_outstanding <= 1'b1;
+            else if (i_branch_valid)
+                f_branch_outstanding <= 1'b0;
+        end
+
         always @(posedge i_clk) begin
             // cache will never "respond" without a request
             if (f_past_valid && i_mem_valid)
@@ -247,7 +272,35 @@ module warp_fetch #(
             a_mem: cover (f_mem_outstanding);
         end
 
-        reg [63:0] f_mem_rdata;
+        // reg [63:0] f_mem_rdata;
+        wire [63:0] f_buffer = hold ? f_hold_buffer : buffer;
+        (* anyconst *) reg [63:0] f_buffer1, f_buffer2;
+        (* any *) reg f_latch_d1;
+        initial assume (f_buffer1 != f_buffer2);
+
+        reg f_in1, f_in2, f_out1, f_out2;
+        always @(posedge i_clk, negedge i_rst_n) begin
+            if (!i_rst_n) begin
+                f_in1 <= 1'b0;
+                f_in2 <= 1'b0;
+                f_out1 <= 1'b0;
+                f_out2 <= 1'b0;
+            end else begin
+                if (i_mem_valid && (i_mem_rdata == f_buffer1) && f_latch_d1)
+                    f_in1 <= 1'b1;
+                if (i_mem_valid && (i_mem_rdata == f_buffer2))
+                    f_in2 <= 1'b1;
+                if (!f_in1)
+                    assume (!f_in2);
+
+                if (o_output_valid && (f_buffer == f_buffer1))
+                    f_out1 <= 1'b1;
+                if (o_output_valid && (f_buffer == f_buffer2))
+                    f_out2 <= 1'b1;
+            end
+        end
+
+        reg f_advance0, f_advance2, f_advance4, f_advance6, f_advance8;
 
         always @(posedge i_clk) begin
             if (f_past_valid && !$past(i_rst_n)) begin
@@ -272,37 +325,70 @@ module warp_fetch #(
                 // assuming instruction cache and branch resolution
                 // are "fair" and don't stall indefinitely
                 // NOTE: currently not using the fairness assumptions
+                if ((f_cycle == `WARP_FORMAL_DEPTH) && f_latch_d1)
+                    a_liveness: assert (f_in1);
+
+                // order: if `d1` was received on the cache interface
+                // before `d2`, it should also appear on the output
+                // interface first
+                if (f_in1 && f_in2 && !f_out1)
+                    a_order: assert (!f_out2);
+
                 // if (i_mem_valid)
                 //     f_mem_rdata <= i_mem_rdata;
-
                 // assert property (s_eventually (o_output_valid && (buffer == f_mem_rdata)));
 
                 // branch target resolution
-                // if (f_past_valid && $past(state == STALL) && $past(i_branch_valid)) begin
-                //     assert (state == BUSY);
-                //     assert (pc == i_branch_target);
-                // end
+                if (f_past_valid && $stable(i_rst_n) && $past(state == RESOL) && $past(i_branch_valid)) begin
+                    a_branch: assert (
+                        (state == INIT) ||
+                        ((state == FETCH) && (pc == $past(i_branch_target)))
+                    );
+                end
 
                 // state machine check: if receiving data from memory,
                 // we expect to be in idle, fetch or cache stages
                 if (i_mem_valid)
-                    assert ((state == INIT) || (state == FETCH) || (state == CACHE));
+                    a_rx: assert ((state == INIT) || (state == FETCH) || (state == CACHE));
 
-                a_valid:    cover (f_past_valid && $past(i_rst_n) && $rose(o_output_valid));
-                a_notvalid: cover (f_past_valid && $past(i_rst_n) && $fell(o_output_valid));
+                c_valid:    cover (f_past_valid && $past(i_rst_n) && $rose(o_output_valid));
+                c_notvalid: cover (f_past_valid && $past(i_rst_n) && $fell(o_output_valid));
                 // ensures we can achieve 100% throughput (back to back)
-                a_throughput: cover (f_past_valid && $past(sent, 2) && sent);
+                c_throughput: cover (f_past_valid && $past(sent, 2) && sent);
 
                 // state transitions
-                a_state1: cover (f_past_valid && $past(state == VALID) && (state == FETCH));
-                // cover (f_past_valid && $past(state == CACHE) && (state == FETCH));
-                // cover (f_past_valid && $past(state == RESOL) && (state == FETCH));
+                c_state1: cover (f_past_valid && $past(state == VALID) && (state == FETCH));
+                c_state2: cover (f_past_valid && $past(state == CACHE) && (state == FETCH));
+                c_state3: cover (f_past_valid && $past(state == RESOL) && (state == FETCH));
 
-                // // stall protection - both runaway and indefinite stall
-                // if (f_past_valid && $past(state != BUSY))
-                //     assert ($stable(pc));
-                // if (f_past_valid && $past(state == BUSY))
-                //     cover (!$stable(pc));
+                // stall protection - both runaway and indefinite stall
+                if (f_past_valid && !$past(sent) && !$past(i_branch_valid))
+                    a_pc: assert ((pc == RESET_ADDR) || $stable(pc));
+                if (f_past_valid && $past(state == BUSY))
+                    c_pc1: cover (!$stable(pc));
+
+                f_advance0 = f_past_valid && (pc == ($past(pc) + 64'h0));
+                f_advance2 = f_past_valid && (pc == ($past(pc) + 64'h2));
+                f_advance4 = f_past_valid && (pc == ($past(pc) + 64'h4));
+                f_advance6 = f_past_valid && (pc == ($past(pc) + 64'h6));
+                f_advance8 = f_past_valid && (pc == ($past(pc) + 64'h8));
+
+                assert (
+                    (pc == RESET_ADDR) ||
+                    f_advance0 ||
+                    f_advance2 ||
+                    f_advance4 ||
+                    f_advance6 ||
+                    f_advance8 ||
+                    ($past(i_branch_valid) && (pc == $past(i_branch_target)))
+                );
+
+                c_pc2:  cover (f_advance0);
+                c_pc3:  cover (f_advance2);
+                c_pc4:  cover (f_advance4);
+                c_pc5:  cover (f_advance6);
+                c_pc6:  cover (f_advance8);
+                c_jump: cover (f_past_valid && $past(i_branch_valid) && (pc == $past(i_branch_target)));
             end
         end
     `endif
