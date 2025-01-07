@@ -26,24 +26,23 @@ module warp_fetch #(
             pc <= next_pc;
     end
 
-    reg [63:0] buffer;
-    always @(posedge i_clk, negedge i_rst_n) begin
-        if (!i_rst_n)
-            buffer <= 64'h0;
-        else if (i_mem_valid)
-            buffer <= i_mem_rdata;
-    end
+    wire [63:0] buffer = i_mem_rdata;
+    // reg [63:0] buffer;
+    // always @(posedge i_clk, negedge i_rst_n) begin
+    //     if (!i_rst_n)
+    //         buffer <= 64'h0;
+    //     else if (i_mem_valid)
+    //         buffer <= i_mem_rdata;
+    // end
 
     reg buffer_valid;
     always @(posedge i_clk, negedge i_rst_n) begin
         if (!i_rst_n)
             buffer_valid <= 1'h0;
-        else begin
-            if (i_mem_valid)
-                buffer_valid <= 1'b1;
-            else if (sent)
-                buffer_valid <= 1'b0;
-        end
+        else if (i_output_ready)
+            buffer_valid <= 1'b0;
+        else if (i_mem_valid)
+            buffer_valid <= 1'b1;
     end
 
     // detect compressed instructions and segment appropriately
@@ -58,6 +57,30 @@ module warp_fetch #(
         .i_inst({inst0, inst1}), .i_compressed(compressed),
         .o_branch(branch)
     );
+
+    // if the first instruction is not a branch, the second is valid
+    // this unit does not attempt to speculate past a branch in a single
+    // cycle, as this requires double the read bandwidth from the cache
+    wire count = !branch[0];
+
+    // latches output data to hold if not immediately accepted
+    // by receiver (output_valid held for multiple cycles)
+    reg [31:0] hold_inst0, hold_inst1;
+    reg [1:0]  hold_compressed;
+    reg        hold_count;
+    always @(posedge i_clk, negedge i_rst_n) begin
+        if (!i_rst_n) begin
+            hold_inst0 <= 32'h0;
+            hold_inst1 <= 32'h0;
+            hold_compressed <= 2'b0;
+            hold_count <= 1'b0;
+        end else if (i_mem_valid) begin
+            hold_inst0 <= inst0;
+            hold_inst1 <= inst1;
+            hold_compressed <= compressed;
+            hold_count <= count;
+        end
+    end
 
     // output instruction(s) and pipeline next request to cache
     // if valid (output ready and didn't hit a branch)
@@ -107,6 +130,13 @@ module warp_fetch #(
     end
 
     wire valid = buffer_valid;
+    reg mem_ren;
+    always @(posedge i_clk, negedge i_rst_n) begin
+        if (!i_rst_n)
+            mem_ren <= 1'b0;
+        else
+            mem_ren <= (next_state == FETCH);
+    end
 
     // advance the pc depending on predecode results
     // this is only used in some state transitions
@@ -136,22 +166,20 @@ module warp_fetch #(
             next_pc = advance_pc;
     end
 
+    wire hold = state == VALID;
     // the cache read enable is asserted for exactly one cycle
     // after an instruction was sent - else we are stalled for
     // some reason. the cache interface latches this request and
     // it doesn't need to be continuously asserted on cache miss.
     // when fully pipelined (and on cache hit) this can achieve
     // 100% throughput, reading an address each clock cycle.
-    assign o_mem_ren = i_rst_n && (next_state == FETCH);
+    assign o_mem_ren = mem_ren;
     assign o_mem_raddr = pc;
-    assign o_output_valid = valid;
-    assign o_inst0 = inst0;
-    assign o_inst1 = inst1;
-    assign o_compressed = compressed;
-    // if the first instruction is not a branch, the second is valid
-    // this unit does not attempt to speculate past a branch in a single
-    // cycle, as this requires double the read bandwidth from the cache
-    assign o_count = !branch[0];
+    assign o_output_valid = hold ? valid : i_mem_valid; // valid || i_mem_valid;
+    assign o_inst0 = hold ? hold_inst0 : inst0;
+    assign o_inst1 = hold ? hold_inst1 : inst1;
+    assign o_compressed = hold ? hold_compressed : compressed;
+    assign o_count = hold ? hold_count : count;
 
     `ifdef WARP_FORMAL
         reg f_past_valid;
@@ -180,15 +208,13 @@ module warp_fetch #(
                 assert (!o_output_valid);
             end
 
-            if (f_past_valid && !$rose(i_clk)) begin
+            if (i_rst_n && !$rose(i_clk)) begin
                 assume ($stable(i_mem_rdata));
                 assume ($stable(i_mem_valid));
                 assume ($stable(i_branch_target));
                 assume ($stable(i_branch_valid));
                 assume ($stable(i_output_ready));
-            end
 
-            if (f_past_valid && !$rose(i_clk) && !$changed(i_rst_n)) begin
                 assert ($stable(o_mem_raddr));
                 assert ($stable(o_mem_ren));
                 assert ($stable(o_output_valid));
@@ -202,30 +228,37 @@ module warp_fetch #(
         reg f_mem_outstanding;
         initial f_mem_outstanding <= 1'b0;
         always @(posedge i_clk, negedge i_rst_n) begin
-            if (!i_rst_n) begin
+            if (!i_rst_n)
                 f_mem_outstanding <= 1'b0;
-            end else begin
-                if (o_mem_ren)
-                    f_mem_outstanding <= 1'b1;
-                else if (i_mem_valid)
-                    f_mem_outstanding <= 1'b0;
-
-                // cache will never "respond" without a request
-                if (!f_mem_outstanding)
-                    assume (!i_mem_valid);
-
-                cover (f_mem_outstanding);
-            end
+            else if (o_mem_ren)
+                f_mem_outstanding <= 1'b1;
+            else if (i_mem_valid)
+                f_mem_outstanding <= 1'b0;
         end
+
+        always @(posedge i_clk) begin
+            // cache will never "respond" without a request
+            if (f_past_valid && i_mem_valid)
+                assume (f_mem_outstanding);
+            // unit must not issue a memory request while
+            // another one is outstanding
+            if (o_mem_ren)
+                assert (!f_mem_outstanding || i_mem_valid);
+
+            cover (f_mem_outstanding);
+        end
+
+        reg [63:0] f_mem_rdata;
 
         always @(posedge i_clk) begin
             if (f_past_valid && !$past(i_rst_n)) begin
                 assert (!o_output_valid);
-                assert (o_mem_ren == i_rst_n);
+                assert (!o_mem_ren);
             end
 
             if (i_rst_n) begin
-                // stable - if output is valid but not ready (transmitted),
+                // downstream backpressure should not drop insts:
+                // if output is valid but not ready (transmitted),
                 // the output data should remain stable
                 if (f_past_valid && (state != INIT) && $past(o_output_valid) && !$past(i_output_ready)) begin
                     assert ($stable(o_output_valid));
@@ -235,22 +268,21 @@ module warp_fetch #(
                     assert ($stable(o_count));
                 end
 
-                // liveness - instruction fetched must eventually appear
-                // at output interface, assuming instruction cache and
-                // branch resolution are "fair" and don't stall indefinitely
-                // track outstanding memory requests
+                // liveness:
+                // instruction received from the cache
+                // must eventually appear at output interface,
+                // assuming instruction cache and branch resolution
+                // are "fair" and don't stall indefinitely
+                // NOTE: currently not using the fairness assumptions
+                // if (i_mem_valid)
+                //     f_mem_rdata <= i_mem_rdata;
 
-                // TODO: assert no request while outstanding
-                // memory interface will never respond without request
-
-                // memory request should be stable during transaction
-                // if (f_past_valid && $past(f_mem_outstanding))
-                //     assert ($stable(o_mem_raddr));
+                // assert property (s_eventually (o_output_valid && (buffer == f_mem_rdata)));
 
                 // if 'busy' state received memory, should propogate
                 // without wasting any cycles
-                // if (f_past_valid && $past(i_rst_n) && $past(state == BUSY) && $past(i_mem_valid))
-                //     assert (o_output_valid);
+                if (f_past_valid && f_mem_outstanding && $past(i_mem_valid))
+                    assert (o_output_valid);
 
                 // branch target resolution
                 // if (f_past_valid && $past(state == STALL) && $past(i_branch_valid)) begin
@@ -258,23 +290,16 @@ module warp_fetch #(
                 //     assert (pc == i_branch_target);
                 // end
 
-                // if (f_past_valid && $past(o_output_valid) && !$past(i_output_ready)) begin
-                //     assert ($stable(o_inst0));
-                //     assert ($stable(o_inst1));
-                //     assert ($stable(o_compressed));
-                //     assert ($stable(o_count));
-                // end
-                //
-                // cover (f_past_valid && $rose(valid));
-                // cover (f_past_valid && $fell(valid));
-                // cover (f_past_valid && $past(valid) && valid);
-                //
+                cover (f_past_valid && $past(i_rst_n) && $rose(o_output_valid));
+                cover (f_past_valid && $past(i_rst_n) && $fell(o_output_valid));
+                // ensures we can achieve 100% throughput (back to back)
+                cover (f_past_valid && $past(sent) && sent);
+
                 // state transitions
-                // cover (f_past_valid && $past(state == VALID) && (state == BUSY));
-                // cover (state == STALL);
-                // cover (f_past_valid && $past(state == BUSY) && $past(|branch));
-                // cover (f_past_valid && $past(state == STALL) && (state == BUSY));
-                //
+                cover (f_past_valid && $past(state == VALID) && (state == FETCH));
+                // cover (f_past_valid && $past(state == CACHE) && (state == FETCH));
+                // cover (f_past_valid && $past(state == RESOL) && (state == FETCH));
+
                 // // stall protection - both runaway and indefinite stall
                 // if (f_past_valid && $past(state != BUSY))
                 //     assert ($stable(pc));
