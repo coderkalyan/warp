@@ -134,14 +134,6 @@ module warp_fetch #(
         endcase
     end
 
-    // wire valid = buffer_valid;
-    // reg mem_ren;
-    // always @(posedge i_clk, negedge i_rst_n) begin
-    //     if (!i_rst_n)
-    //         mem_ren <= 1'b0;
-    //     else
-    //         mem_ren <= (next_state == FETCH);
-    // end
     wire mem_ren = i_rst_n && (next_state == FETCH);
 
     // advance the pc depending on predecode results
@@ -324,9 +316,8 @@ module warp_fetch #(
                 // must eventually appear at output interface,
                 // assuming instruction cache and branch resolution
                 // are "fair" and don't stall indefinitely
-                // NOTE: currently not using the fairness assumptions
-                if ((f_cycle == `WARP_FORMAL_DEPTH) && f_latch_d1)
-                    a_liveness: assert (f_in1);
+                if ((f_cycle == `WARP_FORMAL_DEPTH) && f_in1)
+                    a_liveness: assert (f_out1);
 
                 // order: if `d1` was received on the cache interface
                 // before `d2`, it should also appear on the output
@@ -364,7 +355,7 @@ module warp_fetch #(
                 // stall protection - both runaway and indefinite stall
                 if (f_past_valid && !$past(sent) && !$past(i_branch_valid))
                     a_pc: assert ((pc == RESET_ADDR) || $stable(pc));
-                if (f_past_valid && $past(state == BUSY))
+                if (f_past_valid && $past(state == FETCH))
                     c_pc1: cover (!$stable(pc));
 
                 f_advance0 = f_past_valid && (pc == ($past(pc) + 64'h0));
