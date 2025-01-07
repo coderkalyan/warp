@@ -27,13 +27,6 @@ module warp_fetch #(
     end
 
     wire [63:0] buffer = i_mem_rdata;
-    // reg [63:0] buffer;
-    // always @(posedge i_clk, negedge i_rst_n) begin
-    //     if (!i_rst_n)
-    //         buffer <= 64'h0;
-    //     else if (i_mem_valid)
-    //         buffer <= i_mem_rdata;
-    // end
 
     reg buffer_valid;
     always @(posedge i_clk, negedge i_rst_n) begin
@@ -105,12 +98,14 @@ module warp_fetch #(
             state <= next_state;
     end
 
-    // instruction "sent and received" if output handshake succeeds
+    // instruction "sent" if output handshake succeeds
     // that is, fetch is valid and receiver ready
     wire sent = o_output_valid && i_output_ready;
     wire branched = branch != 2'b00;
 
     always @(*) begin
+        next_state = state;
+
         case (state)
             INIT: next_state = FETCH;
             // FETCH -> VALID if output not ready
@@ -129,14 +124,15 @@ module warp_fetch #(
         endcase
     end
 
-    wire valid = buffer_valid;
-    reg mem_ren;
-    always @(posedge i_clk, negedge i_rst_n) begin
-        if (!i_rst_n)
-            mem_ren <= 1'b0;
-        else
-            mem_ren <= (next_state == FETCH);
-    end
+    // wire valid = buffer_valid;
+    // reg mem_ren;
+    // always @(posedge i_clk, negedge i_rst_n) begin
+    //     if (!i_rst_n)
+    //         mem_ren <= 1'b0;
+    //     else
+    //         mem_ren <= (next_state == FETCH);
+    // end
+    wire mem_ren = i_rst_n && (next_state == FETCH);
 
     // advance the pc depending on predecode results
     // this is only used in some state transitions
@@ -175,7 +171,8 @@ module warp_fetch #(
     // 100% throughput, reading an address each clock cycle.
     assign o_mem_ren = mem_ren;
     assign o_mem_raddr = pc;
-    assign o_output_valid = hold ? valid : i_mem_valid; // valid || i_mem_valid;
+    // assign o_output_valid = hold ? valid : i_mem_valid; // valid || i_mem_valid;
+    assign o_output_valid = i_mem_valid || hold;
     assign o_inst0 = hold ? hold_inst0 : inst0;
     assign o_inst1 = hold ? hold_inst1 : inst1;
     assign o_compressed = hold ? hold_compressed : compressed;
@@ -208,13 +205,15 @@ module warp_fetch #(
                 assert (!o_output_valid);
             end
 
-            if (i_rst_n && !$rose(i_clk)) begin
+            if (!$rose(i_clk)) begin
                 assume ($stable(i_mem_rdata));
                 assume ($stable(i_mem_valid));
                 assume ($stable(i_branch_target));
                 assume ($stable(i_branch_valid));
                 assume ($stable(i_output_ready));
+            end
 
+            if (f_past_valid && !$changed(i_rst_n) && !$rose(i_clk)) begin
                 assert ($stable(o_mem_raddr));
                 assert ($stable(o_mem_ren));
                 assert ($stable(o_output_valid));
@@ -245,7 +244,7 @@ module warp_fetch #(
             if (o_mem_ren)
                 assert (!f_mem_outstanding || i_mem_valid);
 
-            cover (f_mem_outstanding);
+            a_mem: cover (f_mem_outstanding);
         end
 
         reg [63:0] f_mem_rdata;
@@ -253,7 +252,6 @@ module warp_fetch #(
         always @(posedge i_clk) begin
             if (f_past_valid && !$past(i_rst_n)) begin
                 assert (!o_output_valid);
-                assert (!o_mem_ren);
             end
 
             if (i_rst_n) begin
@@ -261,11 +259,11 @@ module warp_fetch #(
                 // if output is valid but not ready (transmitted),
                 // the output data should remain stable
                 if (f_past_valid && (state != INIT) && $past(o_output_valid) && !$past(i_output_ready)) begin
-                    assert ($stable(o_output_valid));
-                    assert ($stable(o_inst0));
-                    assert ($stable(o_inst1));
-                    assert ($stable(o_compressed));
-                    assert ($stable(o_count));
+                    a_backpressure1: assert ($stable(o_output_valid));
+                    a_backpressure2: assert ($stable(o_inst0));
+                    a_backpressure3: assert ($stable(o_inst1));
+                    a_backpressure4: assert ($stable(o_compressed));
+                    a_backpressure5: assert ($stable(o_count));
                 end
 
                 // liveness:
@@ -279,24 +277,24 @@ module warp_fetch #(
 
                 // assert property (s_eventually (o_output_valid && (buffer == f_mem_rdata)));
 
-                // if 'busy' state received memory, should propogate
-                // without wasting any cycles
-                if (f_past_valid && f_mem_outstanding && $past(i_mem_valid))
-                    assert (o_output_valid);
-
                 // branch target resolution
                 // if (f_past_valid && $past(state == STALL) && $past(i_branch_valid)) begin
                 //     assert (state == BUSY);
                 //     assert (pc == i_branch_target);
                 // end
 
-                cover (f_past_valid && $past(i_rst_n) && $rose(o_output_valid));
-                cover (f_past_valid && $past(i_rst_n) && $fell(o_output_valid));
+                // state machine check: if receiving data from memory,
+                // we expect to be in idle, fetch or cache stages
+                if (i_mem_valid)
+                    assert ((state == INIT) || (state == FETCH) || (state == CACHE));
+
+                a_valid:    cover (f_past_valid && $past(i_rst_n) && $rose(o_output_valid));
+                a_notvalid: cover (f_past_valid && $past(i_rst_n) && $fell(o_output_valid));
                 // ensures we can achieve 100% throughput (back to back)
-                cover (f_past_valid && $past(sent) && sent);
+                a_throughput: cover (f_past_valid && $past(sent, 2) && sent);
 
                 // state transitions
-                cover (f_past_valid && $past(state == VALID) && (state == FETCH));
+                a_state1: cover (f_past_valid && $past(state == VALID) && (state == FETCH));
                 // cover (f_past_valid && $past(state == CACHE) && (state == FETCH));
                 // cover (f_past_valid && $past(state == RESOL) && (state == FETCH));
 
