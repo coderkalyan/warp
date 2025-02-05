@@ -354,10 +354,51 @@ module warp_cdecode (
     wire [3:0] funct4  = i_inst[15:12];
     wire [5:0] funct6  = i_inst[15:10];
 
+    wire op_addi4spn = (opcode == 2'b00) && (funct3 == 3'b000);
+    wire op_fld      = (opcode == 2'b00) && (funct3 == 3'b001);
+    wire op_lw       = (opcode == 2'b00) && (funct3 == 3'b010);
+    wire op_ld       = (opcode == 2'b00) && (funct3 == 3'b011);
+    wire op_fsd      = (opcode == 2'b00) && (funct3 == 3'b101);
+    wire op_sw       = (opcode == 2'b00) && (funct3 == 3'b110);
+    wire op_sd       = (opcode == 2'b00) && (funct3 == 3'b111);
+    wire op_addi     = (opcode == 2'b01) && (funct3 == 3'b000);
+    wire op_addiw    = (opcode == 2'b01) && (funct3 == 3'b001);
+    wire op_li       = (opcode == 2'b01) && (funct3 == 3'b010);
+    // lui/addi16sp
+    wire op_lui      = (opcode == 2'b01) && (funct3 == 3'b011);
+    wire op_misc_alu = (opcode == 2'b01) && (funct3 == 3'b100);
+    wire op_j        = (opcode == 2'b01) && (funct3 == 3'b101);
+    wire op_beqz     = (opcode == 2'b01) && (funct3 == 3'b110);
+    wire op_bnez     = (opcode == 2'b01) && (funct3 == 3'b111);
+    wire op_slli     = (opcode == 2'b10) && (funct3 == 3'b000);
+    wire op_fldsqp   = (opcode == 2'b10) && (funct3 == 3'b001);
+    wire op_lwsp     = (opcode == 2'b10) && (funct3 == 3'b010);
+    wire op_ldsp     = (opcode == 2'b10) && (funct3 == 3'b011);
+    // j[al]r/mv/add
+    wire op_jalr     = (opcode == 2'b10) && (funct3 == 3'b100);
+    wire op_fsdsp    = (opcode == 2'b10) && (funct3 == 3'b101);
+    wire op_swsp     = (opcode == 2'b10) && (funct3 == 3'b110);
+    wire op_sdsp     = (opcode == 2'b10) && (funct3 == 3'b111);
+
+    // immediate decoding
+    wire format_cr  = ;
+    wire format_ci  = ;
+    wire format_css = ;
+    wire format_ciw = op_addi4spn;
+    wire format_cl  = ;
+    wire format_cs  = ;
+    wire format_ca  = ;
+    wire format_cb  = ;
+    wire format_cj  = ;
+
+    wire [15:0] imm;
+
     // instruction valid
     reg valid;
     // backend pipeline selection
     reg [3:0] pipeline;
+    // register selection
+    reg [4:0] rd, rs1, rs2;
     // xarith control signals
     reg [1:0] xarith_opsel;
     reg xarith_sub, xarith_unsigned, xarith_cmp_mode;
@@ -369,6 +410,9 @@ module warp_cdecode (
     always @(*) begin
         valid = 1'b0;
         pipeline = 4'bxxxx;
+        rd = 5'bxxxxx;
+        rs1 = 5'bxxxxx;
+        rs2 = 5'bxxxxx;
         xarith_opsel = 2'bxx;
         xarith_sub = 1'bx;
         xarith_unsigned = 1'bx;
@@ -378,6 +422,106 @@ module warp_cdecode (
         xlogic_opsel = 3'bxxx;
         xlogic_invert = 1'bx;
         xlogic_sll = 2'bxx;
+
+        case (1'b1)
+            // TODO: ci: lwsp, ldsp, fldsp
+            // TODO: css: swsp, sdsp, fsdsp
+            // TODO: cl: lw, ld, fld
+            // TODO: cs: sw, sd, fsd
+            // TODO: cj: j
+            // TODO: cr: jr, jalr
+            // TODO: cb: beqz, bnez
+            // TODO: ci: li, lui
+            // TODO: ci: addi, addiw, addi16sp
+            // TODO: ciw: addi4spn
+            // addi4spn
+            // op_addi4spn: begin
+            //     // TODO: invalid if immediate is zero
+            //     valid = 1'b1;
+            //     pipeline = `PIPE_XARITH;
+            //     xarith_opsel = `XARITH_OP_ADD;
+            // end
+            // slli
+            op_slli: begin
+                valid = rs1_rd != 5'd0;
+                pipeline = `PIPE_XLOGIC;
+                xlogic_opsel = `XLOGIC_OP_SHF;
+                rd = rd_rs1;
+                rs1 = rd_rs1;
+                // TODO: add control signal for direction
+            end
+            // mv, add
+            op_jalr: begin
+                valid = (rs1_rd != 5'd0) && (rs2 != 5'd0);
+                pipeline = `PIPE_XARITH;
+                xarith_opsel = `XARITH_OP_ADD;
+                xarith_sub = 1'b0;
+                rd = rd_rs1;
+                rs1 = funct4[0] ? rd_rs1 : 5'd0;
+                rs2 = rs2;
+            end
+            // srli, srai, andi, and, or, xor, sub, addw, subw
+            op_misc_alu: begin
+                rd = {2'b01, rdp};
+                rs1 = {2'b01, rdp};
+                rs2 = {2'b01, rs2p};
+
+                case (i_inst[11:10])
+                    // srli, srai
+                    2'b00, 2'b01: begin
+                        valid = 1'b1;
+                        pipeline = `PIPE_XLOGIC;
+                        xlogic_opsel = `XLOGIC_OP_SHF;
+                        // TODO: add control signal for direction, arithmetic
+                    end
+                    2'b10: begin
+                        valid = 1'b1;
+                        pipeline = `PIPE_XLOGIC;
+                        xlogic_opsel = `XLOGIC_OP_AND;
+                    end
+                    // and, or, xor, sub, addw, subw
+                    2'b11: begin
+                        case ({i_inst[12], i_inst[6:5]})
+                            // sub
+                            3'b000: begin
+                                valid = 1'b1;
+                                pipeline = `PIPE_XARITH;
+                                xarith_opsel = `XARITH_OP_ADD;
+                                xarith_sub = 1'b1;
+                            end
+                            // xor
+                            3'b001: begin
+                                valid = 1'b1;
+                                pipeline = `PIPE_XLOGIC;
+                                xlogic_opsel = `XLOGIC_OP_XOR;
+                            end
+                            // or
+                            3'b010: begin
+                                valid = 1'b1;
+                                pipeline = `PIPE_XLOGIC;
+                                xlogic_opsel = `XLOGIC_OP_OR;
+                            end
+                            // and
+                            3'b011: begin
+                                valid = 1'b1;
+                                pipeline = `PIPE_XLOGIC;
+                                xlogic_opsel = `XLOGIC_OP_AND;
+                            end
+                            // subw, addw
+                            3'b100, 3'b101, 3'b110, 3'b111: begin
+                                valid = i_inst[6] == 1'b0;
+                                pipeline = `PIPE_XARITH;
+                                xarith_opsel = `XARITH_OP_ADD;
+                                xarith_sub = 1'b1;
+                                // TODO: mark lower 32
+                            end
+                        endcase
+                    end
+                endcase
+            end
+            // TODO: ci: nop
+            // TODO: cr: ebreak
+        endcase
     end
 endmodule
 
