@@ -1,21 +1,28 @@
 [tasks]
-bmc
-cover
+bmc bounded
+cover bounded
+# live unbounded
 
 [options]
-bmc: mode bmc
+bmc:   mode bmc
 cover: mode cover
-depth 15
+# live:  mode live
+bounded: depth 15
+multiclock on
 
 [engines]
-smtbmc z3
+bounded: smtbmc z3
+# unbounded: aiger suprove
 
 [script]
-verilog_defines -DWARP_FORMAL
+verilog_defines -DWARP_FORMAL -DWARP_FORMAL_DEPTH=13
+# @depth@
 read -formal warp_fetch.v warp_integer.v warp_decode.v
-prep -top warp_fetch
+# read -formal -sv warp_formal.sv
+prep -top warp_decode
 
 [files]
 rtl/warp_fetch.v
 rtl/warp_decode.v
 rtl/warp_integer.v
+# rtl/warp_formal.sv
