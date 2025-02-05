@@ -13,15 +13,34 @@
 `define XLOGIC_OP_CTZ 3'b110
 `define XLOGIC_OP_POP 3'b111
 
+// scalar integer arithmetic unit - add/sub, set less than, min/max, branch
 module warp_xarith (
     input  wire [63:0] i_op1,
     input  wire [63:0] i_op2,
+    // `XARITH_OP_ADD: o_result = i_op1 +/- i_op2
+    // `XARITH_OP_SLT: o_result = (i_op1 < i_op2) ? 1'b1 : 1'b0
+    // `XARITH_OP_CMP: o_result = min/max(i_op1, i_op2)
     input  wire [1:0]  i_opsel,
+    // subtract mode: when asserted, negate i_op2 before adding
+    // only used for OP_ADD
     input  wire        i_sub,
+    // unsigned: treat i_op1 and i_op2 as unsigned numbers for comparison
+    // only used for OP_SLT, OP_CMP, and branch comparison
     input  wire        i_unsigned,
+    // comparison mode: when asserted, min, otherwise max
+    // only used for OP_CMP
     input  wire        i_cmp_mode,
+    // if asserted, branch resolution compares (in)equality
+    // if not, compares less than (unsigned)
     input  wire        i_branch_equal,
+    // if asserted, branch resolution negates the comparison
+    // eq  -> ne
+    // lt  -> ge
+    // ltu -> geu
     input  wire        i_branch_invert,
+    // when asserted, operate on lower 32 bits only of i_op1 and i_op2 and
+    // sign extend the result to 64 bits
+    // only used for OP_ADD
     input  wire        i_word,
     output wire [63:0] o_result,
     output wire        o_branch
@@ -67,9 +86,26 @@ endmodule
 module warp_xlogic (
     input  wire [63:0] i_op1,
     input  wire [63:0] i_op2,
+    // `XLOGIC_OP_AND: o_result = i_op1 & i_op2
+    // `XLOGIC_OP_OR : o_result = i_op1 | i_op2
+    // `XLOGIC_OP_XOR: o_result = i_op1 ^ i_op2
+    // `XLOGIC_OP_SHF: o_result = i_op1 <</>>/>>> i_op2
+    // `XLOGIC_OP_SLA: o_result = (i_op1 << sll[1:0]) + i_op2
+    // `XLOGIC_OP_CLZ: o_result = leadingzeros(i_op1)
+    // `XLOGIC_OP_CTZ: o_result = trailingzeros(i_op1)
+    // `XLOGIC_OP_POP: o_result = popcount(i_op1)
     input  wire [2:0]  i_opsel,
+    // when asserted, invert (logical not) i_op2
+    // implements andnot, ornot, and xnor
+    // only used for OP_AND, OR_OR, OP_XOR
     input  wire        i_invert,
+    // number of bits to shift i_op1 left by before adding i_op2
+    // used for address generation (2/4/8 * base + offset)
+    // only used for OP_SLA
     input  wire [1:0]  i_sll,
+    // when asserted, operate on lower 32 bits only of i_op1 and i_op2 and
+    // sign extend the result to 64 bits
+    // only used for OP_SHF
     input  wire        i_word,
     output wire [63:0] o_result
 );
@@ -77,11 +113,9 @@ module warp_xlogic (
     wire [63:0] op2 = i_op2 ^ {64{i_invert}};
     wire [63:0] and_result = i_op1 & op2;
     wire [63:0] or_result  = i_op1 | op2;
+    wire [63:0] xor_result = i_op1 ^ op2; // i_op1 ^ ~i_op2 == i_op1 ~^ i_op2
 
-    // xor with conditional invert of result
-    wire [63:0] xor_result = (i_op1 ^ i_op2) ^ {64{i_invert}};
-
-    // shift left 2 bits + add (address generation)
+    // shift left 1/2/3 (2 bits operand) + add (address generation)
     wire [63:0] sl1 = i_sll[1] ? {i_op1[61:0], 2'b00} : i_op1;
     wire [63:0] sl0 = i_sll[0] ? {sl1[62:0], 1'b0} : sl1;
     wire [63:0] sla_result = sl0 + i_op2;
@@ -103,7 +137,7 @@ module warp_xlogic (
     assign o_result = result;
 endmodule
 
-// TODO:while the interface to this register file is
+// TODO: while the interface to this register file is
 // (mostly) correct, it currently will synthesize very
 // poorly to FPGAs and needs to be internally reworked
 module warp_xrf (
