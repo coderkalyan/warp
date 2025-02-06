@@ -274,9 +274,10 @@ module warp_udecode (
     reg [1:0] xarith_opsel;
     reg xarith_sub, xarith_unsigned, xarith_cmp_mode;
     reg xarith_branch_equal, xarith_branch_invert;
+    reg xarith_word;
     // xlogic control signals
     reg [2:0] xlogic_opsel;
-    reg xlogic_invert;
+    reg xlogic_invert, xlogic_word;
     reg [1:0] xlogic_sll;
     always @(*) begin
         legal = 1'b0;
@@ -287,8 +288,10 @@ module warp_udecode (
         xarith_cmp_mode = 1'bx;
         xarith_branch_equal = 1'bx;
         xarith_branch_invert = 1'bx;
+        xarith_word = 1'bx;
         xlogic_opsel = 3'bxxx;
         xlogic_invert = 1'bx;
+        xlogic_word = 1'bx;
         xlogic_sll = 2'bxx;
 
         case (1'b1)
@@ -300,42 +303,49 @@ module warp_udecode (
                         legal = 1'b1;
                         pipeline = `PIPE_XARITH;
                         xarith_opsel = `XARITH_OP_ADD;
+                        xarith_word = 1'b0;
                     end
                     // slli
                     3'b001: begin
                         legal = i_inst[31:26] == 6'b000000;
                         pipeline = `PIPE_XLOGIC;
                         xlogic_opsel = `XLOGIC_OP_SHF;
+                        xlogic_word = 1'b0;
                     end
                     // slti, sltiu
                     3'b010, 3'b011: begin
                         legal = 1'b1;
                         pipeline = `PIPE_XARITH;
                         xarith_opsel = `XARITH_OP_SLT;
+                        xlogic_word = 1'b0;
                     end
                     // xori
                     3'b100: begin
                         legal = 1'b1;
                         pipeline = `PIPE_XLOGIC;
                         xlogic_opsel = `XLOGIC_OP_XOR;
+                        xlogic_word = 1'b0;
                     end
                     // srli, srai
                     3'b101: begin
                         legal = i_inst[31:26] == 6'b000000 || i_inst[31:26] == 6'b010000;
                         pipeline = `PIPE_XLOGIC;
                         xlogic_opsel = `XLOGIC_OP_SHF;
+                        xlogic_word = 1'b0;
                     end
                     // ori
                     3'b110: begin
                         legal = 1'b1;
                         pipeline = `PIPE_XLOGIC;
                         xlogic_opsel = `XLOGIC_OP_OR;
+                        xlogic_word = 1'b0;
                     end
                     // andi
                     3'b111: begin
                         legal = 1'b1;
                         pipeline = `PIPE_XLOGIC;
                         xlogic_opsel = `XLOGIC_OP_AND;
+                        xlogic_word = 1'b0;
                     end
                 endcase
 
@@ -349,6 +359,7 @@ module warp_udecode (
                 pipeline = `PIPE_XARITH;
                 xarith_opsel = `XARITH_OP_ADD;
                 xarith_sub = 1'b0;
+                xarith_word = 1'b0;
             end
             // addiw, slliw, srliw, sraiw
             op_op_imm_32: begin
@@ -358,18 +369,21 @@ module warp_udecode (
                         legal = 1'b1;
                         pipeline = `PIPE_XARITH;
                         xarith_opsel = `XARITH_OP_ADD;
+                        xarith_word = 1'b1;
                     end
                     // slliw
                     3'b001: begin
                         legal = i_inst[31:25] == 7'b0000000;
                         pipeline = `PIPE_XLOGIC;
                         xlogic_opsel = `XLOGIC_OP_SHF;
+                        xlogic_word = 1'b1;
                     end
                     // srliw, sraiw
                     3'b101: begin
                         legal = i_inst[31:25] == 7'b0000000 || i_inst[31:25] == 7'b0100000;
                         pipeline = `PIPE_XLOGIC;
                         xlogic_opsel = `XLOGIC_OP_SHF;
+                        xlogic_word = 1'b1;
                     end
                 endcase
 
@@ -384,42 +398,49 @@ module warp_udecode (
                         legal = funct7 == 7'b0000000 || funct7 == 7'b0100000;
                         pipeline = `PIPE_XARITH;
                         xarith_opsel = `XARITH_OP_ADD;
+                        xarith_word = 1'b0;
                     end
                     // sll
                     3'b001: begin
                         legal = funct7 == 7'b0000000;
                         pipeline = `PIPE_XLOGIC;
                         xlogic_opsel = `XLOGIC_OP_SHF;
+                        xlogic_word = 1'b0;
                     end
                     // slt, sltu
                     3'b010, 3'b011: begin
                         legal = 1'b1;
                         pipeline = `PIPE_XARITH;
                         xarith_opsel = `XARITH_OP_SLT;
+                        xarith_word = 1'b0;
                     end
                     // xor
                     3'b100: begin
                         legal = 1'b1;
                         pipeline = `PIPE_XLOGIC;
                         xlogic_opsel = `XLOGIC_OP_XOR;
+                        xlogic_word = 1'b0;
                     end
                     // srl, sra
                     3'b101: begin
                         legal = funct7 == 7'b0000000 || funct7 == 7'b0100000;
                         pipeline = `PIPE_XLOGIC;
                         xlogic_opsel = `XLOGIC_OP_SHF;
+                        xlogic_word = 1'b0;
                     end
                     // or
                     3'b110: begin
                         legal = 1'b1;
                         pipeline = `PIPE_XLOGIC;
                         xlogic_opsel = `XLOGIC_OP_OR;
+                        xlogic_word = 1'b0;
                     end
                     // and
                     3'b111: begin
                         legal = 1'b1;
                         pipeline = `PIPE_XLOGIC;
                         xlogic_opsel = `XLOGIC_OP_AND;
+                        xlogic_word = 1'b0;
                     end
                 endcase
 
@@ -433,6 +454,7 @@ module warp_udecode (
                 pipeline = `PIPE_XARITH;
                 xarith_opsel = `XARITH_OP_ADD;
                 xarith_sub = 1'b0;
+                xarith_word = 1'b0;
             end
             op_op_32: begin
                 case (funct3)
@@ -441,18 +463,21 @@ module warp_udecode (
                         legal = funct7 == 7'b0000000 || funct7 == 7'b0100000;
                         pipeline = `PIPE_XARITH;
                         xarith_opsel = `XARITH_OP_ADD;
+                        xarith_word = 1'b1;
                     end
                     // sllw
                     3'b001: begin
                         legal = funct7 == 7'b0000000;
                         pipeline = `PIPE_XLOGIC;
                         xlogic_opsel = `XLOGIC_OP_SHF;
+                        xlogic_word = 1'b1;
                     end
                     // srlw, sraw
                     3'b101: begin
                         legal = funct7 == 7'b0000000 || funct7 == 7'b0100000;
                         pipeline = `PIPE_XLOGIC;
                         xlogic_opsel = `XLOGIC_OP_SHF;
+                        xlogic_word = 1'b1;
                     end
                 endcase
 
