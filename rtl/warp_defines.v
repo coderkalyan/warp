@@ -1,0 +1,22 @@
+`ifndef WARP_DEFINES
+`define WARP_DEFINES
+
+`define XARITH_OP_ADD 2'b00
+`define XARITH_OP_SLT 2'b01
+`define XARITH_OP_CMP 2'b10
+
+`define XLOGIC_OP_AND 3'b000
+`define XLOGIC_OP_OR  3'b001
+`define XLOGIC_OP_XOR 3'b010
+`define XLOGIC_OP_SHF 3'b011
+`define XLOGIC_OP_SLA 3'b100
+`define XLOGIC_OP_CLZ 3'b101
+`define XLOGIC_OP_CTZ 3'b110
+`define XLOGIC_OP_POP 3'b111
+
+`define PIPE_XARITH 4'b0000
+`define PIPE_XLOGIC 4'b0001
+`define PIPE_XMUL   4'b0010
+`define PIPE_XDIV   4'b0011
+
+`endif

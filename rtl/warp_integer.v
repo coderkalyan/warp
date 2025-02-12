@@ -1,17 +1,6 @@
 `default_nettype none
 
-`define XARITH_OP_ADD 2'b00
-`define XARITH_OP_SLT 2'b01
-`define XARITH_OP_CMP 2'b10
-
-`define XLOGIC_OP_AND 3'b000
-`define XLOGIC_OP_OR  3'b001
-`define XLOGIC_OP_XOR 3'b010
-`define XLOGIC_OP_SHF 3'b011
-`define XLOGIC_OP_SLA 3'b100
-`define XLOGIC_OP_CLZ 3'b101
-`define XLOGIC_OP_CTZ 3'b110
-`define XLOGIC_OP_POP 3'b111
+`include "warp_defines.v"
 
 // scalar integer arithmetic unit - add/sub, set less than, min/max, branch
 module warp_xarith (

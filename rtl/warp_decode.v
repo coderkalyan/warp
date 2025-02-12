@@ -1,9 +1,6 @@
 `default_nettype none
 
-`define PIPE_XARITH 4'b0000
-`define PIPE_XLOGIC 4'b0001
-`define PIPE_XMUL   4'b0010
-`define PIPE_XDIV   4'b0011
+`include "warp_defines.v"
 
 module warp_decode (
     input  wire        i_clk,
@@ -558,15 +555,15 @@ module warp_cdecode (
     wire op_sdsp     = (opcode == 2'b10) && (funct3 == 3'b111);
 
     // immediate decoding
-    wire format_cr  = ;
-    wire format_ci  = ;
-    wire format_css = ;
-    wire format_ciw = op_addi4spn;
-    wire format_cl  = ;
-    wire format_cs  = ;
-    wire format_ca  = ;
-    wire format_cb  = ;
-    wire format_cj  = ;
+    // wire format_cr  = ;
+    // wire format_ci  = ;
+    // wire format_css = ;
+    // wire format_ciw = op_addi4spn;
+    // wire format_cl  = ;
+    // wire format_cs  = ;
+    // wire format_ca  = ;
+    // wire format_cb  = ;
+    // wire format_cj  = ;
 
     wire [15:0] imm;
 
