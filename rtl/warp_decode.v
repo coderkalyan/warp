@@ -538,6 +538,7 @@ module warp_cdecode (
     wire op_addi     = (opcode == 2'b01) && (funct3 == 3'b000);
     wire op_addiw    = (opcode == 2'b01) && (funct3 == 3'b001);
     wire op_li       = (opcode == 2'b01) && (funct3 == 3'b010);
+
     // lui/addi16sp
     wire op_lui      = (opcode == 2'b01) && (funct3 == 3'b011);
     wire op_misc_alu = (opcode == 2'b01) && (funct3 == 3'b100);
@@ -545,25 +546,18 @@ module warp_cdecode (
     wire op_beqz     = (opcode == 2'b01) && (funct3 == 3'b110);
     wire op_bnez     = (opcode == 2'b01) && (funct3 == 3'b111);
     wire op_slli     = (opcode == 2'b10) && (funct3 == 3'b000);
-    wire op_fldsqp   = (opcode == 2'b10) && (funct3 == 3'b001);
+    wire op_fldsp   = (opcode == 2'b10) && (funct3 == 3'b001);
     wire op_lwsp     = (opcode == 2'b10) && (funct3 == 3'b010);
     wire op_ldsp     = (opcode == 2'b10) && (funct3 == 3'b011);
+
     // j[al]r/mv/add
     wire op_jalr     = (opcode == 2'b10) && (funct3 == 3'b100);
     wire op_fsdsp    = (opcode == 2'b10) && (funct3 == 3'b101);
     wire op_swsp     = (opcode == 2'b10) && (funct3 == 3'b110);
     wire op_sdsp     = (opcode == 2'b10) && (funct3 == 3'b111);
 
+    wire op_nop      = (opcode == 2'b01) && (funct3 == 3'b000);
     // immediate decoding
-    // wire format_cr  = ;
-    // wire format_ci  = ;
-    // wire format_css = ;
-    // wire format_ciw = op_addi4spn;
-    // wire format_cl  = ;
-    // wire format_cs  = ;
-    // wire format_ca  = ;
-    // wire format_cb  = ;
-    // wire format_cj  = ;
 
     wire [15:0] imm;
 
@@ -581,6 +575,44 @@ module warp_cdecode (
     reg [2:0] xlogic_opsel;
     reg xlogic_invert;
     reg [1:0] xlogic_sll;
+    reg
+        format_cr,
+        format_ci,
+        format_css,
+        format_ciw,
+        format_cl,
+        format_cs,
+        format_ca,
+        format_cb,
+        format_cj;
+    // wire format_cr  = ;
+    // wire format_ci  = ;
+    // wire format_css = ;
+    // wire format_ciw = op_addi4spn;
+    // wire format_cl  = ;
+    // wire format_cs  = ;
+    // wire format_ca  = ;
+    // wire format_cb  = ;
+    // wire format_cj  = ;
+
+    //immidates formats
+    wire format_8_43__ = op_beqz | op_bnez;
+    wire formatu_53_86 = op_fsdsp | op_sdsp;
+    wire formatu_52_76 = op_swsp;
+    wire format_x11_4_98_ = op_cj;
+    wire format_5__40 = op_li | op_addiw | op_addi | op_nop; //TODO: op_and
+    wire formatu_5__40 = op_slli; //TODO: op_srai op_srli
+    wire formatu_5__42_76 = op_lwsp;
+    wire formatu_5__43_86 = op_ldsp | op_fldsp;
+    wire formatu_54_96_2_3 = addi4spn;
+    
+    // TODO: LIU and addi16sap format (depends on rd = 2 or not)
+
+    //speical below, use a 2nd case for the lower bits for immeidate
+    wire formatu_53__ = op_fld | op_lw | op_ld | op_fsd | op_sw | op_sd;
+    wire formatu_2_6 = op_lw | op_sw;
+    wire formatu_76 = op_fld | op_ld | op_fsd | op_sd;
+
     always @(*) begin
         valid = 1'b0;
         pipeline = 4'bxxxx;
@@ -598,6 +630,7 @@ module warp_cdecode (
         xlogic_sll = 2'bxx;
 
         case (1'b1)
+            // FIXME: fix immediates 
             // TODO: ci: lwsp, ldsp, fldsp
             // TODO: css: swsp, sdsp, fsdsp
             // TODO: cl: lw, ld, fld
@@ -616,6 +649,31 @@ module warp_cdecode (
             //     xarith_opsel = `XARITH_OP_ADD;
             // end
             // slli
+            op_addi4spn: begin
+                //TODO: valid = (nzuimm != 8'd0);
+                pipeline = `PIPE_XARITH;
+                xarith_opsel = `XARITH_OP_ADD;
+                xarith_sub = 1'b0;
+                rd = rsp;
+                rs1 = 5'd2;
+
+            end
+            op_li: begin
+                valid = rs1_rd != 5'd0;
+                pipeline = `PIPE_XARITH;
+                xarith_opsel = `XARITH_OP_ADD;
+                xarith_sub = 1'b0;
+                rd = rs1_rd;
+                rs1 = 5'd0;
+            end
+            op_lui: begin
+                valid = (rs1_rd != 5'd0) & (rs1 != 5'd2);
+                pipeline = `PIPE_XARITH;
+                xarith_opsel = `XARITH_OP_ADD;
+                xarith_sub = 1'b0;
+                rd = rs1_rd;
+                rs1 = 5'd0;
+            end
             op_slli: begin
                 valid = rs1_rd != 5'd0;
                 pipeline = `PIPE_XLOGIC;
@@ -696,6 +754,78 @@ module warp_cdecode (
             // TODO: ci: nop
             // TODO: cr: ebreak
         endcase
+        //TODO: sign extend (and make sure error check for invalid imm)
+        case(1'b1)
+        format_8_43__:begin
+            imm[8] = opcode[12];
+            imm[4:3] = opcode[11:10];
+            imm[7:6] = opcode[6:5];
+            imm[2:1] =opcode[4:3];
+            imm[5] = opcode[2];
+        end
+        formatu_53_86:begin
+            imm[5:3] = opcode[12:10];
+            imm[8:6] = opcode[9:7];
+        end
+        formatu_52_76:begin
+            imm[5:2] = opcode[12:9];
+            imm[7:6] = opcode[8:7];
+        end
+        format_x11_4_98_:begin
+            imm[11] = opcode[12];
+            imm[4] = opcode[11];
+            imm[9:8] = opcode[10:9];
+            imm[10] = opcode[8];
+            imm[6] = opcode[7];
+            imm[7] = opcode[6];
+            imm[3:1] = opcode[5:3];
+            imm[5] = opcode[2];
+        end
+        format_5__40:
+        begin
+            imm[5] = opcode[12];
+            imm[4:0] = opcode[6:2];
+        end
+        formatu_5__40:
+        begin
+            imm[5] = opcode[12];
+            imm[4:0] = opcode[6:2];
+        end
+        formatu_5__42_76:
+        begin
+            imm[5] = opcode[12];
+            imm[4:2] = opcode[6:4];
+            imm[7:6] = opcode[3:2];
+        end
+        formatu_5__43_86:
+        begin
+            imm[5] = opcode[12];
+            imm[4:3] = opcode[6:5];
+            imm[8:6] = opcode[4:2];
+        end
+        formatu_54_96_2_3:
+        begin
+            imm[5:4] = opcode[12:11];
+            imm[9:6] = opcode[10:7];
+            imm[2] = opcode[6];
+            imm[3] = opcode[5];
+        end
+        formatu_53__:
+        begin
+            imm[5:3]= opcode[12:10];
+        end
+        formatu_2_6:
+        begin
+            imm[2]= opcode[6];
+            imm[6]= opcode[5];
+        end
+        formatu_76:
+        begin
+            imm[7]= opcode[6];
+            imm[6]= opcode[5];
+        end
+        endcase
+
     end
 endmodule
 
