@@ -2,6 +2,11 @@
 
 `include "warp_defines.v"
 
+`define XSHIFT_OP_SHL 2'b00
+`define XSHIFT_OP_SHR 2'b01
+`define XSHIFT_OP_ROL 2'b10
+`define XSHIFT_OP_ROR 2'b11
+
 // scalar integer arithmetic unit - add/sub, set less than, min/max, branch
 module warp_xarith (
     input  wire [63:0] i_op1,
@@ -124,6 +129,107 @@ module warp_xlogic (
     end
 
     assign o_result = result;
+endmodule
+
+// latency: 2 cycles
+// throughput: 1 cpi
+// since throughput and latency are fixed, this unit does not
+// employ a "done" signal and expects the parent issue logic to
+// expect a value with the given delay
+module warp_xshift (
+    input  wire        i_clk,
+    input  wire        i_rst_n,
+    input  wire [63:0] i_operand,
+    input  wire [5:0]  i_amount,
+    // `XSHIFT_OP_SHL: o_result = i_operand << i_amount
+    // `XSHIFT_OP_SHR: o_result = i_operand >>/>>> i_amount
+    // `XSHIFT_OP_ROL: o_result = i_operand rol i_amount
+    // `XSHIFT_OP_ROR: o_result = i_operand ror i_amount
+    input  wire [1:0]  i_opsel,
+    // if asserted, shift right arithmetic instead of logical (>>/>>>)
+    // only used for OP_SHR
+    input  wire        i_arithmetic,
+    // when asserted, operate on lower 32 bits only of operands and
+    // sign extend the result to 64 bits
+    input  wire        i_word,
+    output wire [63:0] o_result
+);
+endmodule
+
+// multiplies two 64 bit operands and outputs the lower 64 bits of
+// the result
+// latency: 1 - 2 cycles
+// throughput: 1 cpi
+module warp_xmultl (
+    input  wire        i_clk,
+    input  wire        i_rst_n,
+    // multiplication is performed when valid is asserted
+    input  wire        i_valid,
+    input  wire [63:0] i_op1,
+    input  wire [63:0] i_op2,
+    // when asserted, operate on lower 32 bits of operands and
+    // sign extend the result to 64 bits
+    // 32 bit operations take 1 cycle, while 64 bit operations
+    // take 2 cycles
+    input  wire        i_word,
+    // when asserted, o_result contains the result of the most
+    // recently completed multiply
+    output wire        o_valid,
+    output wire [63:0] o_result
+);
+endmodule
+
+// multiplies two 64 bit operands and outputs the upper 64 bits of
+// the result
+// latency: 2 cycles
+// throughput: 1 cpi
+module warp_xmulth (
+    input  wire        i_clk,
+    input  wire        i_rst_n,
+    // multiplication is performed when valid is asserted
+    input  wire        i_valid,
+    input  wire [63:0] i_op1,
+    input  wire [63:0] i_op2,
+    // when asserted, the corresponding operand is treated
+    // as unsigned instead of signed
+    // this is used to implement mulhu and mulhsu
+    input  wire [1:0]  i_unsigned,
+    // when asserted, o_result contains the result of the most
+    // recently completed multiply
+    output wire        o_valid,
+    output wire [63:0] o_result
+);
+endmodule
+
+// divides two 64 bit operands and outputs the quotient
+// and remainder of the result
+// latency: varied
+// throughput: 1 / latency
+module warp_xdiv (
+    input  wire        i_clk,
+    input  wire        i_rst_n,
+    // division is performed when valid and ready are asserted
+    // this handshake is necessary because the divider does not
+    // have a throughput of 1 cpi, and the state machine must
+    // complete a varied latency operation before accepting another
+    input  wire        i_input_valid,
+    output wire        o_input_ready,
+    input  wire [63:0] i_op1,
+    input  wire [63:0] i_op2,
+    // when asserted, operands are treated as unsigned
+    input  wire        i_unsigned,
+    // when asserted, operate on lower 32 bits of operands and
+    // sign extend the result to 64 bits
+    input  wire        i_word,
+    // when asserted, o_quotient and o_remainder contain the result
+    // of the completed division operation
+    // a full ready/valid handshake is not necessary here because it
+    // is assumed the writeback stage can always accept output data
+    // and will buffer it externally as necessary
+    output wire        o_valid,
+    output wire [63:0] o_quotient,
+    output wire [63:0] o_remainder
+);
 endmodule
 
 // TODO: while the interface to this register file is
