@@ -102,4 +102,48 @@ module warp_skid #(
 `endif
 endmodule
 
+module warp_decoder #(
+    parameter width = 1,
+    parameter depth = 2 ** width
+) (
+    input  wire [width - 1:0] i_input,
+    output wire [depth - 1:0] o_output
+);
+    // TODO: determine if synthesis(yosys) generates good
+    // output for this or if its better to unroll a loop
+    reg [depth - 1:0] output;
+    always @(*) begin
+        output = {depth{1'b0}};
+        output[i_input] = 1'b1;
+    end
+
+    assign o_output = output;
+endmodule
+
+module warp_ahbm_formal #(
+    parameter addr_width = 64,
+    parameter data_width = 64,
+    parameter strb_width = $clog2(data_width),
+) (
+    input  wire                    i_ahb_hclk,
+    input  wire                    i_ahb_hreset_n,
+    input  wire [addr_width - 1:0] i_ahb_haddr,
+    input  wire [2:0]              i_ahb_hburst,
+    input  wire                    i_ahb_hmastlock,
+    input  wire [3:0]              i_ahb_hprot,
+    input  wire [2:0]              i_ahb_hsize,
+    input  wire                    i_ahb_hnonsec,
+    input  wire                    i_ahb_hexcl,
+    input  wire [1:0]              i_ahb_htrans,
+    input  wire [63:0]             i_ahb_hwdata,
+    input  wire [strb_width:0]     i_ahb_hwstrb,
+    input  wire                    i_ahb_hwrite,
+    output wire [63:0]             o_ahb_hrdata,
+    output wire                    o_ahb_hreadyout,
+    output wire                    o_ahb_hresp,
+    output wire                    o_ahb_hexokay
+);
+    
+endmodule
+
 `default_nettype wire
