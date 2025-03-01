@@ -19,8 +19,8 @@ module warp_icache (
     input  wire        i_res_ready,
     output wire [63:0] i_res_rdata,
     // AHB5 interface (manager) to memory
-    output wire        o_ahb_hclk,
-    output wire        o_ahb_hreset_n,
+    input  wire        o_ahb_hclk,
+    input  wire        o_ahb_hreset_n,
     output wire [33:0] o_ahb_haddr,
     output wire [2:0]  o_ahb_hburst,
     output wire        o_ahb_hmastlock,

@@ -1,5 +1,7 @@
 `default_nettype none
 
+`include "warp_defines.v"
+
 // skid buffer implementation
 // see https://fpgacpu.ca/fpga/Pipeline_Skid_Buffer.html
 module warp_skid #(
@@ -139,11 +141,62 @@ module warp_ahbm_formal #(
     input  wire [strb_width:0]     i_ahb_hwstrb,
     input  wire                    i_ahb_hwrite,
     output wire [63:0]             o_ahb_hrdata,
-    output wire                    o_ahb_hreadyout,
+    output wire                    o_ahb_hready,
     output wire                    o_ahb_hresp,
     output wire                    o_ahb_hexokay
 );
-    
+    // this formal interface connects to a manager, rather than being embedded
+    // into one. therefore the input/output roles are swapped here - inputs
+    // are asserted, and outputs are assumed
+    (* gclk *) reg formal_timestep;
+
+    reg f_past_valid;
+    initial f_past_valid <= 1'b0;
+    always @(posedge i_ahb_hclk) f_past_valid <= 1'b1;
+
+    initial assume (!i_ahb_hreset_n);
+
+    always @(posedge formal_timestep) begin
+        // async assert, synchronous deassert of reset
+        if (f_past_valid && !$past(i_ahb_hreset_n) && !$rose(i_ahb_hclk))
+            assume (!i_ahb_hreset_n);
+
+        // all bus lines must be synchronous wrt clk, except under reset
+        if (f_past_valid && !$rose(i_clk) && !$fell(i_ahb_hreset_n)) begin
+            assert ($stable(i_ahb_haddr));
+            assert ($stable(i_ahb_hburst));
+            assert ($stable(i_ahb_hmastlock));
+            assert ($stable(i_ahb_hprot));
+            assert ($stable(i_ahb_hsize));
+            assert ($stable(i_ahb_hnonsec));
+            assert ($stable(i_ahb_hexcl));
+            assert ($stable(i_ahb_htrans));
+            assert ($stable(i_ahb_hwdata));
+            assert ($stable(i_ahb_hwstrb));
+        end
+
+        if (!$rose(i_clk)) begin
+            assume ($stable(o_ahb_hrdata));
+            assume ($stable(o_ahb_hready));
+            assume ($stable(o_ahb_hresp));
+            assume ($stable(o_ahb_hexokay));
+        end
+    end
+
+    always @(*) begin
+        // specification requires idle and hready under reset
+        if (!i_ahb_hreset_n) begin
+            assert (i_ahb_htrans == `AHB_HTRANS_IDLE);
+            assume (o_ahb_hready);
+        end
+    end
+
+    always @(posedge i_ahb_hclk) begin
+        // if subordinate extends (does not assert ready), manager must hold
+        // all signals stable
+        if (f_past_valid && $past(i_ahb_htrans != `AHB_HTRANS_IDLE) && !$past(o_ahb_hready))
+            assert 
+    end
 endmodule
 
 // this is a dual entry skid buffer placed between stages of the dual

@@ -19,6 +19,11 @@
 `define PIPE_XMUL   4'b0010
 `define PIPE_XDIV   4'b0011
 
+`define AHB_HTRANS_IDLE   2'b00
+`define AHB_HTRANS_BUSY   2'b01
+`define AHB_HTRANS_NONSEQ 2'b10
+`define AHB_HTRANS_SEQ    2'b11
+
 `define CANONICAL_NOP 32'h00000013
 `define BUNDLE_SIZE 65
 
