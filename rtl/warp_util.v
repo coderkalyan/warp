@@ -146,4 +146,21 @@ module warp_ahbm_formal #(
     
 endmodule
 
+// this is a dual entry skid buffer placed between stages of the dual
+// issue pipeline. this gives a place to buffer instructions when a stage is
+// only able to consume one instruction out of two, and otherwise smooth out
+// inconsistent data rates.
+// module warp_dualskid #(
+//     parameter width = 32,
+// ) (
+//     input  wire               i_clk,
+//     input  wire               i_rst_n,
+//     input  wire [1:0]         i_wcount,
+//     output wire [1:0]         o_wcapacity,
+//     input  wire [width - 1:0] i_wdata0,
+//     input  wire [width - 1:0] i_wdata1,
+//     input  wire               i_
+// );
+endmodule
+
 `default_nettype wire

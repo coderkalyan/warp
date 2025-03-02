@@ -19,4 +19,7 @@
 `define PIPE_XMUL   4'b0010
 `define PIPE_XDIV   4'b0011
 
+`define CANONICAL_NOP 32'h00000013
+`define BUNDLE_SIZE 65
+
 `endif
