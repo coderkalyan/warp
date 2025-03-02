@@ -1,5 +1,7 @@
 `default_nettype none
 
+`include "warp_defines.v"
+
 module warp_fetch_old #(
     parameter RESET_ADDR = 39'h4000000000
 ) (
@@ -427,8 +429,7 @@ module warp_fetch #(
     input  wire        i_output_ready,
     output wire [31:0] o_inst0,
     output wire [31:0] o_inst1,
-    output wire [1:0]  o_compressed,
-    output wire        o_count
+    output wire [1:0]  o_compressed
 );
     reg [39:0] pc, next_pc;
     always @(posedge i_clk, negedge i_rst_n) begin
@@ -520,9 +521,8 @@ module warp_fetch #(
 
     assign o_output_valid = output_valid;
     assign o_inst0 = inst0;
-    assign o_inst1 = inst1;
-    assign o_compressed = compressed;
-    assign o_count = count;
+    assign o_inst1 = count ? inst1 : `CANONICAL_NOP;
+    assign o_compressed = {count ? compressed[1] : 1'b0, compressed[0]};
 
 `ifdef WARP_FORMAL
     reg f_past_valid;
@@ -562,7 +562,6 @@ module warp_fetch #(
             assert ($stable(o_inst0));
             assert ($stable(o_inst1));
             assert ($stable(o_compressed));
-            assert ($stable(o_count));
         end
     end
 
@@ -623,19 +622,10 @@ module warp_fetch #(
             // the output data should remain stable
             if (f_past_valid && $past(o_output_valid) && !$past(i_output_ready)) begin
                 assert ($stable(o_output_valid));
-                assert ($stable(o_count));
-                // the implementation will hold both of these stable in
-                // practice, but technically it only needs to uphold this
-                // contract for the valid instructions
-                // TODO: to behave like an optimal 2 entry fifo, we should
-                // be able to load one more instruction following a single
-                // instruction output that was not consumed downstream
-                assert ($stable(o_compressed[0]));
+                assert ($stable(o_compressed));
                 assert ($stable(o_inst0));
-                if (o_count) begin
-                    assert ($stable(o_compressed[1]));
-                    assert ($stable(o_inst1));
-                end
+                assert ($stable(o_inst1));
+                assert ($stable(pc));
             end
 
             // TODO: liveness
@@ -646,9 +636,9 @@ module warp_fetch #(
             // waiting for memory -> still waiting
             cover (f_past_valid && !$past(o_output_valid) && !o_output_valid);
             // serving instruction -> still serving the same one
-            cover (f_past_valid && $past(o_output_valid) && o_past_valid && $stable(pc) && $stable(o_count) && $stable(o_inst0) && $stable(o_inst1));
+            cover (f_past_valid && $past(o_output_valid) && o_past_valid && $stable(pc) && $stable(o_compressed) && $stable(o_inst0) && $stable(o_inst1));
             // back to back dual issue of different insts (100% throughput)
-            cover (f_past_valid && $past(transmit) && $past(o_count) && transmit && o_count && !$stable(i_mem_rdata));
+            cover (f_past_valid && $past(transmit) && $past(count) && transmit && count && !$stable(i_imem_rdata));
         end
     end
 `endif
