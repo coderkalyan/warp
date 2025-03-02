@@ -5,20 +5,56 @@
 module warp_decode (
     input  wire        i_clk,
     input  wire        i_rst_n,
+    // if fetch cannot deliver any
+    // instructions, i_input_valid is not asserted. if fetch only has one valid
+    // instruction, it pads the stream with a nop (which is discarded by the
+    // issue stage down the pipeline)
     output wire        o_input_ready,
     input  wire        i_input_valid,
     input  wire [31:0] i_inst0,
     input  wire [31:0] i_inst1,
     input  wire [1:0]  i_compressed,
-    input  wire        i_count,
+    // after consuming two instructions from fetch and decoding them, this
+    // unit always presents both as valid on the next cycle. however, if
+    // issue is not ready (i_output_ready), this unit has to hold the two
+    // instructions (like an integrated skid buffer)
     input  wire        i_output_ready,
     output wire        o_output_valid,
-    output wire [64:0] o_bundle0,
-    output wire [64:0] o_bundle1,
-    output wire        o_count
+    output wire [BUNDLE_SIZE - 1:0] o_bundle0,
+    output wire [BUNDLE_SIZE - 1:0] o_bundle1
 );
-    // decode stage doesn't generate any valid or ready
-    // signals, only propogates them
+    wire [31:0] decode_inst     [1:0];
+    wire        decode_legal    [1:0];
+    wire [14:0] decode_raddr    [1:0];
+    wire [31:0] decode_imm      [1:0]; // TODO: consider reducing imm size by doing signext later
+    wire [3:0]  decode_pipeline [1:0];
+    wire [6:0]  decode_xarith   [1:0];
+    wire [5:0]  decode_xlogic   [1:0];
+    wire [BUNDLE_SIZE - 1:0] decode_bundle [1:0];
+
+    // can't assign both of these inline due to verilog syntax limitations
+    assign decode_inst[0] = i_inst0;
+    assign decode_inst[1] = i_inst1;
+
+    genvar i;
+    generate
+        for (i = 0; i < 2; i = i + 1) begin
+            warp_udecode udecode (
+                .i_inst(decode_inst[i]),
+                .o_legal(decode_legal[i]),
+                .o_raddr(decode_raddr[i]),
+                .o_imm(decode_imm[i]),
+                .o_pipeline(decode_pipeline[i]),
+                .o_xarith(decode_xarith[i]),
+                .o_xlogic(decode_xlogic[i])
+            );
+            assign decode_bundle[i] = {decode_legal[i], decode_raddr[i], decode_imm[i], decode_pipeline[i], decode_xarith[i], decode_xlogic[i]};
+        end
+    endgenerate
+
+    // decode always accepts two instructions (if available) but since issue
+    // could stall, a skid buffer is required to hold the two instructions
+    // until the !o_output_ready signal propogates up the pipeline to the fetch
     reg ready, valid;
     always @(posedge i_clk, negedge i_rst_n) begin
         if (!i_rst_n) begin
@@ -30,47 +66,28 @@ module warp_decode (
         end
     end
 
-    wire        decode_legal    [0:3];
-    wire [14:0] decode_raddr    [0:3];
-    wire [31:0] decode_imm      [0:3];
-    wire [3:0]  decode_pipeline [0:3];
-    wire [6:0]  decode_xarith   [0:3];
-    wire [5:0]  decode_xlogic   [0:3];
-    warp_udecode udecode [0:1] (
-        .i_inst({i_inst0, i_inst1}),
-        .o_legal({decode_legal[0], decode_legal[1]}),
-        .o_raddr({decode_raddr[0], decode_raddr[1]}),
-        .o_imm({decode_imm[0], decode_imm[1]}),
-        .o_pipeline({decode_pipeline[0], decode_pipeline[1]}),
-        .o_xarith({decode_xarith[0], decode_xarith[1]}),
-        .o_xlogic({decode_xlogic[0], decode_xlogic[1]})
-    );
-
-    wire [64:0] decode_bundle [0:3];
-    genvar i;
-    generate
-        for (i = 0; i < 4; i = i + 1)
-            assign decode_bundle[i] = {decode_legal[i], decode_raddr[i], decode_imm[i], decode_pipeline[i], decode_xarith[i], decode_xlogic[i]};
-    endgenerate
-
-    reg [64:0] bundle0, bundle1;
-    reg        count;
-
+    // the skid buffer always latches the decoded bundle when available, but
+    // if there is no backpressure the latch is bypassed and bundles are
+    // directly forwarded to output
+    reg [BUNDLE_SIZE - 1:0] fifo [1:0];
     always @(posedge i_clk, negedge i_rst_n) begin
         if (!i_rst_n) begin
-            bundle0 <= 64'h0;
-            bundle1 <= 64'h0;
-            count <= 1'b0;
-        end else begin
-            bundle0 <= i_compressed[0] ? decode_bundle[2] : decode_bundle[0];
-            bundle1 <= i_compressed[1] ? decode_bundle[3] : decode_bundle[1];
-            count <= i_count;
+            fifo[0] <= {BUNDLE_SIZE{1'b0}};
+            fifo[1] <= {BUNDLE_SIZE{1'b0}};
+        end else if (i_input_valid) begin
+            // FIXME: mux compressed/uncompressed once cdecode is working
+            fifo[0] <= decode_bundle[0];
+            fifo[1] <= decode_bundle[1];
         end
     end
 
+    // when encountering backpressure from issue, propogate ready signal
     assign o_input_ready = ready;
+    // if fetch is valid, decode is always valid one cycle later
     assign o_output_valid = valid;
-    assign o_bundle0 = bundle0;
+    // depending on if skidding or not, bypass or use fifo
+    wire skid = valid && !ready;
+    assign o_bundle0 = !ready ? bundle0;
     assign o_bundle1 = bundle1;
     assign o_count = count;
 
@@ -499,6 +516,7 @@ module warp_udecode (
     assign o_xlogic[5:4] = xlogic_sll;
 endmodule
 
+/*
 module warp_cdecode (
     input  wire [15:0] i_inst,
     output wire        o_valid,
@@ -518,7 +536,7 @@ module warp_cdecode (
     output wire [1:0]  o_xlogic_sll
 );
     wire [1:0] opcode  = i_inst[1:0];
-    wire [4:0] rs2     = i_inst[6:2];
+    // wire [4:0] rs2     = i_inst[6:2];
     wire [4:0] rs1_rd  = i_inst[11:7];
     wire [2:0] rdp     = i_inst[4:2];
     wire [2:0] rs2p    = i_inst[4:2];
@@ -828,5 +846,6 @@ module warp_cdecode (
 
     end
 endmodule
+*/
 
 `default_nettype wire
