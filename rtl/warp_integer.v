@@ -253,13 +253,38 @@ module warp_xrf (
     output wire [63:0] o_rs4_rdata
 );
     reg [63:0] file [30:0];
-    reg [63:0] rs1_rdata, rs2_rdata; //, rs3_rdata, rs4_rdata;
+    reg [63:0] rs1_rdata, rs2_rdata, rs3_rdata, rs4_rdata;
     always @(posedge i_clk) begin
         begin
-            rs1_rdata <= file[~i_rs1_addr];
-            rs2_rdata <= file[~i_rs2_addr];
-            rs3_rdata <= file[~i_rs3_addr];
-            rs4_rdata <= file[~i_rs4_addr];
+            // implement bypassing for all read ports, assumes
+            // rd1 != rd2
+            if (i_rd1_wen && (i_rs1_addr == i_rd1_addr))
+                rs1_rdata <= i_rd1_wdata;
+            else if (i_rd2_wen && (i_rs1_addr == i_rd2_addr))
+                rs1_rdata <= i_rd2_wdata;
+            else
+                rs1_rdata <= file[~i_rs1_addr];
+
+            if (i_rd1_wen && (i_rs2_addr == i_rd1_addr))
+                rs2_rdata <= i_rd1_wdata;
+            else if (i_rd2_wen && (i_rs2_addr == i_rd2_addr))
+                rs2_rdata <= i_rd2_wdata;
+            else
+                rs2_rdata <= file[~i_rs2_addr];
+
+            if (i_rd1_wen && (i_rs3_addr == i_rd1_addr))
+                rs3_rdata <= i_rd1_wdata;
+            else if (i_rd2_wen && (i_rs3_addr == i_rd2_addr))
+                rs3_rdata <= i_rd2_wdata;
+            else
+                rs3_rdata <= file[~i_rs3_addr];
+
+            if (i_rd1_wen && (i_rs4_addr == i_rd1_addr))
+                rs4_rdata <= i_rd1_wdata;
+            else if (i_rd2_wen && (i_rs4_addr == i_rd2_addr))
+                rs4_rdata <= i_rd2_wdata;
+            else
+                rs4_rdata <= file[~i_rs4_addr];
 
             if (i_rd1_wen)
                 file[~i_rd1_addr] <= i_rd1_wdata;
