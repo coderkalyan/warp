@@ -3,7 +3,7 @@
 `include "warp_defines.v"
 
 // skid buffer implementation
-// see https://fpgacpu.ca/fpga/Pipeline_Skid_Buffer.html
+// adapted from https://fpgacpu.ca/fpga/Pipeline_Skid_Buffer.html
 module warp_skid #(
     parameter WIDTH = 1
 ) (
@@ -16,10 +16,32 @@ module warp_skid #(
     input  wire               i_output_ready,
     output wire [WIDTH - 1:0] o_output_data
 );
+    wire insert = i_input_valid  && o_input_ready;
+    wire remove = o_output_valid && i_output_ready;
+    wire load  = (state == STATE_EMPTY) &&  insert && !remove;
+    wire flow  = (state == STATE_BUSY)  &&  insert &&  remove;
+    wire fill  = (state == STATE_BUSY)  &&  insert && !remove;
+    wire flush = (state == STATE_FULL)  && !insert &&  remove;
+
     localparam STATE_EMPTY = 2'b00;
     localparam STATE_BUSY  = 2'b01;
     localparam STATE_FULL  = 2'b10;
     reg [1:0] state, next_state;
+    always @(*) begin
+        next_state = state;
+
+        if (insert && !remove && (state != STATE_FULL))
+            next_state = state + 2'h1;
+        else if (!insert && remove && (state != STATE_EMPTY))
+            next_state = state - 2'h1;
+    end
+
+    always @(posedge i_clk, negedge i_rst_n) begin
+        if (!i_rst_n)
+            state <= STATE_EMPTY;
+        else
+            state <= next_state;
+    end
 
     // pipelined ready/valid interface
     reg ready, valid;
@@ -33,73 +55,67 @@ module warp_skid #(
         end
     end
 
-    wire insert = ready && i_input_valid;
-    wire remove = valid && o_output_valid;
-
-    // state transitions
-    // TODO: taken from example article, but probably
-    // can be simplified to saturating addition
-    wire load   = (state == STATE_EMPTY) && insert  && !remove;
-    wire flow   = (state == STATE_BUSY)  && insert  && remove;
-    wire fill   = (state == STATE_BUSY)  && insert  && !remove;
-    wire unload = (state == STATE_BUSY)  && !insert && remove;
-    wire flush  = (state == STATE_FULL)  && !insert && remove;
-
-    always @(*) begin
-        next_state = state;
-
-        case (1'b1)
-            load:   next_state = STATE_BUSY;
-            flow:   next_state = STATE_BUSY;
-            fill:   next_state = STATE_FULL;
-            flush:  next_state = STATE_BUSY;
-            unload: next_state = STATE_EMPTY;
-        endcase
+    // data path
+    reg [WIDTH - 1:0] buffer;
+    always @(posedge i_clk, negedge i_rst_n) begin
+        if (!i_rst_n)
+            buffer <= {WIDTH{1'b0}};
+        else if (fill)
+            buffer <= i_input_data;
     end
 
-    // data path
-    reg  [WIDTH - 1:0] buffer, out;
-    wire [WIDTH - 1:0] out_sel = flush ? buffer : i_input_data;
-
+    reg [WIDTH - 1:0] output_data;
     always @(posedge i_clk, negedge i_rst_n) begin
-        if (!i_rst_n) begin
-            buffer <= {WIDTH{1'b0}};
-            out <= {WIDTH{1'b0}};
-        end else begin
-            if (fill)
-                buffer <= i_input_data;
-            if (load || flow || flush)
-                out <= out_sel;
-        end
+        if (!i_rst_n)
+            output_data <= {WIDTH{1'b0}};
+        else if (load || flow || flush)
+            output_data <= flush ? buffer : i_input_data;
     end
 
     assign o_input_ready = ready;
     assign o_output_valid = valid;
-    assign o_output_data = out;
+    assign o_output_data = output_data;
 
 `ifdef WARP_FORMAL
     reg f_past_valid;
     initial f_past_valid <= 1'b0;
     always @(posedge i_clk) f_past_valid <= 1'b1;
 
-    always @(posedge i_clk) begin
+    wire f_load   = (state == STATE_EMPTY) &&  insert && !remove;
+    wire f_flow   = (state == STATE_BUSY)  &&  insert &&  remove;
+    wire f_fill   = (state == STATE_BUSY)  &&  insert && !remove;
+    wire f_unload = (state == STATE_BUSY)  && !insert &&  remove;
+    wire f_flush  = (state == STATE_FULL)  && !insert &&  remove;
+
+    initial assume (!i_rst_n);
+    initial assume (!i_clk);
+
+    // ready/valid interface always starts up ready but not valid
+    always @(*) begin
         if (!i_rst_n) begin
-            assert(o_input_ready);
-            assert(!o_output_valid);
-        end else begin
-            assert((state == STATE_EMPTY) || (state == STATE_BUSY) || (state == STATE_FULL));
+            assert (o_input_ready);
+            assert (!o_output_valid);
         end
+    end
 
-        cover(o_input_ready);
-        cover(!o_input_ready);
-        cover(o_output_valid);
-        cover(!o_output_valid);
+    always @(posedge i_clk) begin
+        if (i_rst_n) begin
+            // ensure no runaway to invalid state
+            assert((state == STATE_EMPTY) || (state == STATE_BUSY) || (state == STATE_FULL));
 
-        cover(load);
-        cover(flow);
-        cover(fill);
-        cover(unload);
-        cover(flush);
+            // FIXME: implement formal asserts here
+            cover(o_input_ready);
+            cover(!o_input_ready);
+            cover(o_output_valid);
+            cover(!o_output_valid);
+
+            // state transitions
+            cover(load);
+            cover(flow);
+            cover(fill);
+            cover(unload);
+            cover(flush);
+        end
     end
 `endif
 endmodule
@@ -113,13 +129,13 @@ module warp_decoder #(
 );
     // TODO: determine if synthesis(yosys) generates good
     // output for this or if its better to unroll a loop
-    reg [depth - 1:0] output;
+    reg [depth - 1:0] out;
     always @(*) begin
-        output = {depth{1'b0}};
-        output[i_input] = 1'b1;
+        out = {depth{1'b0}};
+        out[i_input] = 1'b1;
     end
 
-    assign o_output = output;
+    assign o_output = out;
 endmodule
 
 module warp_ahbm_formal #(
@@ -194,8 +210,8 @@ module warp_ahbm_formal #(
     always @(posedge i_ahb_hclk) begin
         // if subordinate extends (does not assert ready), manager must hold
         // all signals stable
-        if (f_past_valid && $past(i_ahb_htrans != `AHB_HTRANS_IDLE) && !$past(o_ahb_hready))
-            assert 
+        // if (f_past_valid && $past(i_ahb_htrans != `AHB_HTRANS_IDLE) && !$past(o_ahb_hready))
+        //     assert 
     end
 endmodule
 
@@ -214,6 +230,6 @@ endmodule
 //     input  wire [width - 1:0] i_wdata1,
 //     input  wire               i_
 // );
-endmodule
+// endmodule
 
 `default_nettype wire

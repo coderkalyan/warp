@@ -52,81 +52,23 @@ module warp_decode (
         end
     endgenerate
 
-
     // decode always accepts two instructions (if available) but since issue
     // could stall, a skid buffer is required to hold the two instructions
     // until the !o_output_ready signal propogates up the pipeline to the fetch
-    //
-    // adapted from https://fpgacpu.ca/fpga/Pipeline_Skid_Buffer.html
-    wire insert = i_input_valid  && o_input_ready;
-    wire remove = o_output_valid && i_output_ready;
-    wire load  = (state == STATE_EMPTY) &&  insert && !remove;
-    wire flow  = (state == STATE_BUSY)  &&  insert &&  remove;
-    wire fill  = (state == STATE_BUSY)  &&  insert && !remove;
-    wire flush = (state == STATE_FULL)  && !insert &&  remove;
+    wire input_ready, output_valid;
+    wire [`BUNDLE_SIZE - 1:0] bundle [1:0];
+    warp_skid #(
+        .WIDTH(`BUNDLE_SIZE * 2)
+    ) skid (
+        .i_clk(i_clk), .i_rst_n(i_rst_n),
+        .i_input_valid(i_input_valid), .o_input_ready(input_ready),
+        .i_input_data({decode_bundle[1], decode_bundle[0]}),
+        .o_output_valid(output_valid), .i_output_ready(i_output_ready),
+        .o_output_data({bundle[1], bundle[0]})
+    );
 
-    localparam STATE_EMPTY = 2'h0;
-    localparam STATE_BUSY  = 2'h1;
-    localparam STATE_FULL  = 2'h2;
-    reg [1:0] state, next_state;
-    always @(*) begin
-        next_state = state;
-
-        if (insert && !remove && (state != STATE_FULL))
-            next_state = state + 2'h1;
-        else if (!insert && remove && (state != STATE_EMPTY))
-            next_state = state - 2'h1;
-    end
-
-    always @(posedge i_clk, negedge i_rst_n) begin
-        if (!i_rst_n)
-            state <= STATE_EMPTY;
-        else
-            state <= next_state;
-    end
-
-    reg ready, valid;
-    always @(posedge i_clk, negedge i_rst_n) begin
-        if (!i_rst_n) begin
-            ready <= 1'b1;
-            valid <= 1'b0;
-        end else begin
-            ready <= next_state != STATE_FULL;
-            valid <= next_state != STATE_EMPTY;
-        end
-    end
-
-    // the skid buffer always latches the decoded bundle when available, but
-    // if there is no backpressure the latch is bypassed and bundles are
-    // directly forwarded to output
-    reg [`BUNDLE_SIZE - 1:0] fifo [1:0];
-    always @(posedge i_clk, negedge i_rst_n) begin
-        if (!i_rst_n) begin
-            fifo[0] <= 0;
-            fifo[1] <= 0;
-        end else if (fill) begin
-            // FIXME: mux compressed/uncompressed once cdecode is working
-            fifo[0] <= decode_bundle[0];
-            fifo[1] <= decode_bundle[1];
-        end
-    end
-
-    // depending on if skidding or not, bypass or use fifo
-    reg [`BUNDLE_SIZE - 1:0] bundle [1:0];
-    always @(posedge i_clk, negedge i_rst_n) begin
-        if (!i_rst_n) begin
-            bundle[0] <= 0;
-            bundle[1] <= 0;
-        end else if (load || flow || flush) begin
-            bundle[0] <= flush ? fifo[0] : decode_bundle[0];
-            bundle[1] <= flush ? fifo[1] : decode_bundle[1];
-        end
-    end
-
-    // when encountering backpressure from issue, propogate ready signal
-    assign o_input_ready = ready;
-    // if fetch is valid, decode is always valid one cycle later
-    assign o_output_valid = valid;
+    assign o_input_ready = input_ready;
+    assign o_output_valid = output_valid;
     assign o_bundle0 = bundle[0];
     assign o_bundle1 = bundle[1];
 
@@ -173,11 +115,6 @@ module warp_decode (
         end
 
         wire f_transmit = i_output_ready && o_output_valid;
-        wire f_load   = (state == STATE_EMPTY) &&  insert && !remove;
-        wire f_flow   = (state == STATE_BUSY)  &&  insert &&  remove;
-        wire f_fill   = (state == STATE_BUSY)  &&  insert && !remove;
-        wire f_unload = (state == STATE_BUSY)  && !insert &&  remove;
-        wire f_flush  = (state == STATE_FULL)  && !insert &&  remove;
 
         always @(posedge i_clk) begin
             if (i_rst_n) begin
@@ -196,12 +133,6 @@ module warp_decode (
                     assert ($stable(o_bundle1));
                 end
 
-                // skid buffer state transitions
-                cover (f_load);
-                cover (f_flow);
-                cover (f_fill);
-                cover (f_unload);
-                cover (f_flush);
                 // ensure 100% throughput
                 cover (f_past_valid && $past(f_transmit) && f_transmit && $changed(o_bundle0) && $changed(o_bundle1));
             end
