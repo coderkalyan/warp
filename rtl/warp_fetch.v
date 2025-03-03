@@ -2,6 +2,264 @@
 
 `include "warp_defines.v"
 
+module warp_fetch #(
+    parameter RESET_ADDR = 64'h8000000000000000
+) (
+    input  wire        i_clk,
+    input  wire        i_rst_n,
+    // read only parallel interface to instruction memory,
+    // in practice connected to the instruction cache which
+    // is backed by an AHB/AXI connection to the memory
+    // this can transfer 64 bits per clock, which is enough to
+    // feed the 2-wide fetch unit with 2 uncompressed instructions
+    //
+    // to request data from the memory, the address is placed in
+    // raddr and ren is asserted. the memory will reply as soon
+    // as it can by placing data in rdata and asserting valid.
+    // the interface blocks until memory is returned (in case of
+    // a cache miss). if a request was made but valid is not true,
+    // the raddr must be kept stable
+    output wire        o_imem_ren,
+    // currently implementing risc-v sv39, meaning instructions are
+    // addressed in a 39 bit virtual address space. the fetch unit
+    // doesn't care what the underlying physical address space is
+    output wire [38:0] o_imem_raddr,
+    input  wire        i_imem_valid,
+    input  wire [63:0] i_imem_rdata,
+    // input  wire [63:0] i_branch_target,
+    // input  wire        i_branch_valid,
+    // fetch outputs zero or two instructions per clock cycle,
+    // if the instructions are 16 bit, only the lower 16 bits
+    // of o_inst[01] are valid, specified by o_compressed.
+    //
+    // indicates that the fetch unit is presenting valid output
+    // instructions, if not asserted the decode should not try
+    // to consume new instructions. if not asserted, and output
+    // is valid, the fetch should keep the output data stable
+    // (effectively stalling the frontend)
+    output wire        o_output_valid,
+    // indicates that the decode unit is ready to accept the
+    // instructions output here.
+    input  wire        i_output_ready,
+    output wire [31:0] o_inst0,
+    output wire [31:0] o_inst1,
+    output wire [1:0]  o_compressed
+);
+    reg [39:0] pc, next_pc;
+    always @(posedge i_clk, negedge i_rst_n) begin
+        if (!i_rst_n)
+            pc <= RESET_ADDR;
+        else
+            pc <= next_pc;
+    end
+
+    // detect compressed instructions and segment appropriately
+    wire [1:0] compressed;
+    warp_pick pick (.i_buffer(i_imem_rdata), .o_compressed(compressed));
+
+    wire [31:0] inst0 = i_imem_rdata[31:0];
+    wire [31:0] inst1 = compressed[0] ? i_imem_rdata[47:16] : i_imem_rdata[63:32];
+
+    wire [1:0] branch;
+    warp_predecode predecode [1:0] (
+        .i_inst({inst0, inst1}), .i_compressed(compressed),
+        .o_branch(branch)
+    );
+
+    // if the first instruction is not a branch, the second is valid
+    // this unit does not attempt to speculate past a branch in a single
+    // cycle, as this requires double the read bandwidth from the cache
+    // TODO: in certain cases, we may be able to speculate not taken and
+    // fetch here, but this requires more bookkeeping
+    // it might increase frontend significantly for unlikely branches
+    wire count = !branch[0];
+
+    // advance the pc depending on predecode results
+    // this is only used if the fetch data is valid and decode
+    // unit is ready
+    reg [63:0] advance_pc;
+    always @(*) begin
+        advance_pc = 64'hx;
+
+        casez ({branch[0], compressed})
+            3'b000: advance_pc = pc + 64'h8;
+            3'b001,
+            3'b010: advance_pc = pc + 64'h6;
+            3'b011: advance_pc = pc + 64'h4;
+            3'b10?: advance_pc = pc + 64'h4;
+            3'b11?: advance_pc = pc + 64'h2;
+        endcase
+    end
+
+    // because the fetch stalls by requesting the same instruction
+    // from cache, an untransmitted valid instruction will continue
+    // to be valid on the next cycle without latching
+    wire output_valid = i_imem_valid;
+    wire transmit = output_valid && i_output_ready;
+
+    // FIXME: implement branching
+    always @(*) begin
+        // if output is valid and decode is ready to accept,
+        // advance the program counter according to the length
+        // of instructions fetched on this cycle
+        if (transmit)
+            next_pc = advance_pc;
+        // otherwise we have stalled for one reason or another
+        // (waiting on cache, decode not ready)
+        else
+            next_pc = pc;
+    end
+
+    reg imem_init;
+    always @(posedge i_clk, negedge i_rst_n) begin
+        if (!i_rst_n)
+            imem_init <= 1'b1;
+        else
+            imem_init <= 1'b0;
+    end
+
+    // read from imem once on init (first clock), and then every time
+    // there is valid data output so we can read next
+    wire imem_ren = i_rst_n && (imem_init || output_valid);
+
+    // request the next pc address from the cache, which
+    // automatically handles stalling by re-fetching the
+    // same instruction. this shouldn't cause any problems
+    // since the instruction cache is a private single cycle
+    // cache and this theoretically will never cause a cache miss
+    // following an initial cache hit. however in the future it
+    // may be beneficial to latch the buffer and avoid re-fetching
+    // mostly to save energy usage
+    assign o_imem_ren = imem_ren;
+    assign o_imem_raddr = next_pc;
+
+    assign o_output_valid = output_valid;
+    assign o_inst0 = inst0;
+    assign o_inst1 = count ? inst1 : `CANONICAL_NOP;
+    assign o_compressed = {count ? compressed[1] : 1'b0, compressed[0]};
+
+`ifdef WARP_FORMAL
+    reg f_past_valid;
+    initial f_past_valid <= 1'b0;
+    always @(posedge i_clk) f_past_valid <= 1'b1;
+
+    (* gclk *) reg formal_timestep;
+
+    initial assume (!i_rst_n);
+    initial assume (!i_clk);
+
+    always @(*) begin
+        if (!i_rst_n) begin
+            assume (!i_imem_valid);
+
+            assert (!o_output_valid);
+            assert (!o_imem_ren);
+        end
+    end
+
+    // the interface must be entirely synchronous
+    always @(posedge formal_timestep) begin
+        // asynchronous assert, synchronous deassert clock
+        if (f_past_valid && $rose(i_rst_n))
+            assume ($rose(i_clk));
+
+        if (!$rose(i_clk)) begin
+            assume ($stable(i_imem_valid));
+            assume ($stable(i_imem_rdata));
+            assume ($stable(i_output_ready));
+        end
+
+        if (f_past_valid && i_rst_n && !$rose(i_clk)) begin
+            assert ($stable(o_imem_ren));
+            assert ($stable(o_imem_raddr));
+            assert ($stable(o_output_valid));
+            assert ($stable(o_inst0));
+            assert ($stable(o_inst1));
+            assert ($stable(o_compressed));
+        end
+    end
+
+    reg f_mem_outstanding;
+    always @(posedge i_clk, negedge i_rst_n) begin
+        if (!i_rst_n)
+            f_mem_outstanding <= 1'b0;
+        else if (o_imem_ren)
+            f_mem_outstanding <= 1'b1;
+        else if (i_imem_valid)
+            f_mem_outstanding <= 1'b0;
+    end
+
+    // FIXME:ideally, the formal needs to know the behavior of the imem
+    // interface is a memory in order to generally show that multiple
+    // reads to the same address are identical, which is needed because the
+    // fetch unit stalls by repeatedly requesting the same address
+    // however, due to the size of the problem space, currently only
+    // consecutive reads to the same address (when stalled) are ad-hoc assumed
+    reg [39:0] f_raddr;
+    always @(posedge i_clk) begin
+        // track the most recent read from imem
+        if (o_imem_ren)
+            f_raddr <= o_imem_raddr;
+
+        // a cache hit followed by an access to the same address will always
+        // be a cache hit - we assume this to make the fetch unit simpler. if
+        // necessary this can be revised
+        // this is basically temporal locality, and makes no assumptions about
+        // delayed requests to the same address
+        if (f_past_valid && $past(i_imem_valid) && $stable(f_raddr)) begin
+            assume (i_imem_valid);
+            assume ($stable(i_imem_rdata));
+        end
+    end
+
+    always @(posedge i_clk) begin
+        // imem will never respond without a request
+        if (i_imem_valid)
+            assume (f_mem_outstanding);
+
+        // unit must not issue a memory request while another one
+        // is outstanding
+        if (f_mem_outstanding && !i_imem_valid)
+            assert (!o_imem_ren);
+
+        // make sure the unit can actually complete a bus transaction
+        cover (f_mem_outstanding && i_imem_valid);
+
+        // since it takes a clock to read data from the memory following reset,
+        // we should not expect valid output right after reset
+        if (f_past_valid && !$past(i_rst_n))
+            assert (!o_output_valid);
+
+        if (i_rst_n) begin
+            // downstream backpressure should not drop instructions:
+            // if output is valid but decoder not ready (transmitted),
+            // the output data should remain stable
+            if (f_past_valid && $past(o_output_valid) && !$past(i_output_ready)) begin
+                assert ($stable(o_output_valid));
+                assert ($stable(o_compressed));
+                assert ($stable(o_inst0));
+                assert ($stable(o_inst1));
+                assert ($stable(pc));
+            end
+
+            // TODO: liveness
+
+            // cover different state transitions
+            // waiting for memory -> serving instruction
+            cover (f_past_valid && !$past(o_output_valid) && o_output_valid);
+            // waiting for memory -> still waiting
+            cover (f_past_valid && !$past(o_output_valid) && !o_output_valid);
+            // serving instruction -> still serving the same one
+            cover (f_past_valid && $past(o_output_valid) && o_past_valid && $stable(pc) && $stable(o_compressed) && $stable(o_inst0) && $stable(o_inst1));
+            // back to back dual issue of different insts (100% throughput)
+            cover (f_past_valid && $past(transmit) && $past(count) && transmit && count && !$stable(i_imem_rdata));
+        end
+    end
+`endif
+endmodule
+
+`default_nettype wire
+
 module warp_fetch_old #(
     parameter RESET_ADDR = 39'h4000000000
 ) (
@@ -386,262 +644,3 @@ reg f_mem_outstanding;
         end
     `endif
 endmodule
-
-module warp_fetch #(
-    parameter RESET_ADDR = 64'h8000000000000000
-) (
-    input  wire        i_clk,
-    input  wire        i_rst_n,
-    // read only parallel interface to instruction memory,
-    // in practice connected to the instruction cache which
-    // is backed by an AHB/AXI connection to the memory
-    // this can transfer 64 bits per clock, which is enough to
-    // feed the 2-wide fetch unit with 2 uncompressed instructions
-    //
-    // to request data from the memory, the address is placed in
-    // raddr and ren is asserted. the memory will reply as soon
-    // as it can by placing data in rdata and asserting valid.
-    // the interface blocks until memory is returned (in case of
-    // a cache miss). if a request was made but valid is not true,
-    // the raddr must be kept stable
-    output wire        o_imem_ren,
-    // currently implementing risc-v sv39, meaning instructions are
-    // addressed in a 39 bit virtual address space. the fetch unit
-    // doesn't care what the underlying physical address space is
-    output wire [38:0] o_imem_raddr,
-    input  wire        i_imem_valid,
-    input  wire [63:0] i_imem_rdata,
-    // input  wire [63:0] i_branch_target,
-    // input  wire        i_branch_valid,
-    // fetch outputs up to two instructions per clock cycle,
-    // specified by o_cout. if the instructions are 16 bit,
-    // only the lower 16 bits of o_inst[01] are valid.
-    // this is specified by o_compressed.
-    //
-    // indicates that the fetch unit is presenting valid output
-    // instructions, if not asserted the decode should not try
-    // to consume new instructions. if not asserted, and output
-    // is valid, the fetch should keep the output data stable
-    // (effectively stalling the frontend)
-    output wire        o_output_valid,
-    // indicates that the decode unit is ready to accept the
-    // instructions output here.
-    input  wire        i_output_ready,
-    output wire [31:0] o_inst0,
-    output wire [31:0] o_inst1,
-    output wire [1:0]  o_compressed
-);
-    reg [39:0] pc, next_pc;
-    always @(posedge i_clk, negedge i_rst_n) begin
-        if (!i_rst_n)
-            pc <= RESET_ADDR;
-        else
-            pc <= next_pc;
-    end
-
-    // detect compressed instructions and segment appropriately
-    wire [1:0] compressed;
-    warp_pick pick (.i_buffer(i_imem_rdata), .o_compressed(compressed));
-
-    wire [31:0] inst0 = i_imem_rdata[31:0];
-    wire [31:0] inst1 = compressed[0] ? i_imem_rdata[47:16] : i_imem_rdata[63:32];
-
-    wire [1:0] branch;
-    warp_predecode predecode [1:0] (
-        .i_inst({inst0, inst1}), .i_compressed(compressed),
-        .o_branch(branch)
-    );
-
-    // if the first instruction is not a branch, the second is valid
-    // this unit does not attempt to speculate past a branch in a single
-    // cycle, as this requires double the read bandwidth from the cache
-    // TODO: in certain cases, we may be able to speculate not taken and
-    // fetch here, but this requires more bookkeeping
-    // it might increase frontend significantly for unlikely branches
-    wire count = !branch[0];
-
-    // advance the pc depending on predecode results
-    // this is only used if the fetch data is valid and decode
-    // unit is ready
-    reg [63:0] advance_pc;
-    always @(*) begin
-        advance_pc = 64'hx;
-
-        casez ({branch[0], compressed})
-            3'b000: advance_pc = pc + 64'h8;
-            3'b001,
-            3'b010: advance_pc = pc + 64'h6;
-            3'b011: advance_pc = pc + 64'h4;
-            3'b10?: advance_pc = pc + 64'h4;
-            3'b11?: advance_pc = pc + 64'h2;
-        endcase
-    end
-
-    // because the fetch stalls by requesting the same instruction
-    // from cache, an untransmitted valid instruction will continue
-    // to be valid on the next cycle without latching
-    wire output_valid = i_imem_valid;
-    wire transmit = output_valid && i_output_ready;
-
-    // FIXME: implement branching
-    always @(*) begin
-        // if output is valid and decode is ready to accept,
-        // advance the program counter according to the length
-        // of instructions fetched on this cycle
-        if (transmit)
-            next_pc = advance_pc;
-        // otherwise we have stalled for one reason or another
-        // (waiting on cache, decode not ready)
-        else
-            next_pc = pc;
-    end
-
-    reg imem_init;
-    always @(posedge i_clk, negedge i_rst_n) begin
-        if (!i_rst_n)
-            imem_init <= 1'b1;
-        else
-            imem_init <= 1'b0;
-    end
-
-    // read from imem once on init (first clock), and then every time
-    // there is valid data output so we can read next
-    wire imem_ren = i_rst_n && (imem_init || output_valid);
-
-    // request the next pc address from the cache, which
-    // automatically handles stalling by re-fetching the
-    // same instruction. this shouldn't cause any problems
-    // since the instruction cache is a private single cycle
-    // cache and this theoretically will never cause a cache miss
-    // following an initial cache hit. however in the future it
-    // may be beneficial to latch the buffer and avoid re-fetching
-    // mostly to save energy usage
-    assign o_imem_ren = imem_ren;
-    assign o_imem_raddr = next_pc;
-
-    assign o_output_valid = output_valid;
-    assign o_inst0 = inst0;
-    assign o_inst1 = count ? inst1 : `CANONICAL_NOP;
-    assign o_compressed = {count ? compressed[1] : 1'b0, compressed[0]};
-
-`ifdef WARP_FORMAL
-    reg f_past_valid;
-    initial f_past_valid <= 1'b0;
-    always @(posedge i_clk) f_past_valid <= 1'b1;
-
-    (* gclk *) reg formal_timestep;
-
-    initial assume (!i_rst_n);
-    initial assume (!i_clk);
-
-    always @(*) begin
-        if (!i_rst_n) begin
-            assume (!i_imem_valid);
-
-            assert (!o_output_valid);
-            assert (!o_imem_ren);
-        end
-    end
-
-    // the interface must be entirely synchronous
-    always @(posedge formal_timestep) begin
-        // asynchronous assert, synchronous deassert clock
-        if (f_past_valid && $rose(i_rst_n))
-            assume ($rose(i_clk));
-
-        if (!$rose(i_clk)) begin
-            assume ($stable(i_imem_valid));
-            assume ($stable(i_imem_rdata));
-            assume ($stable(i_output_ready));
-        end
-
-        if (f_past_valid && i_rst_n && !$rose(i_clk)) begin
-            assert ($stable(o_imem_ren));
-            assert ($stable(o_imem_raddr));
-            assert ($stable(o_output_valid));
-            assert ($stable(o_inst0));
-            assert ($stable(o_inst1));
-            assert ($stable(o_compressed));
-        end
-    end
-
-    reg f_mem_outstanding;
-    always @(posedge i_clk, negedge i_rst_n) begin
-        if (!i_rst_n)
-            f_mem_outstanding <= 1'b0;
-        else if (o_imem_ren)
-            f_mem_outstanding <= 1'b1;
-        else if (i_imem_valid)
-            f_mem_outstanding <= 1'b0;
-    end
-
-    // FIXME:ideally, the formal needs to know the behavior of the imem
-    // interface is a memory in order to generally show that multiple
-    // reads to the same address are identical, which is needed because the
-    // fetch unit stalls by repeatedly requesting the same address
-    // however, due to the size of the problem space, currently only
-    // consecutive reads to the same address (when stalled) are ad-hoc assumed
-    reg [39:0] f_raddr;
-    always @(posedge i_clk) begin
-        // track the most recent read from imem
-        if (o_imem_ren)
-            f_raddr <= o_imem_raddr;
-
-        // a cache hit followed by an access to the same address will always
-        // be a cache hit - we assume this to make the fetch unit simpler. if
-        // necessary this can be revised
-        // this is basically temporal locality, and makes no assumptions about
-        // delayed requests to the same address
-        if (f_past_valid && $past(i_imem_valid) && $stable(f_raddr)) begin
-            assume (i_imem_valid);
-            assume ($stable(i_imem_rdata));
-        end
-    end
-
-    always @(posedge i_clk) begin
-        // imem will never respond without a request
-        if (i_imem_valid)
-            assume (f_mem_outstanding);
-
-        // unit must not issue a memory request while another one
-        // is outstanding
-        if (f_mem_outstanding && !i_imem_valid)
-            assert (!o_imem_ren);
-
-        // make sure the unit can actually complete a bus transaction
-        cover (f_mem_outstanding && i_imem_valid);
-
-        // since it takes a clock to read data from the memory following reset,
-        // we should not expect valid output right after reset
-        if (f_past_valid && !$past(i_rst_n))
-            assert (!o_output_valid);
-
-        if (i_rst_n) begin
-            // downstream backpressure should not drop instructions:
-            // if output is valid but decoder not ready (transmitted),
-            // the output data should remain stable
-            if (f_past_valid && $past(o_output_valid) && !$past(i_output_ready)) begin
-                assert ($stable(o_output_valid));
-                assert ($stable(o_compressed));
-                assert ($stable(o_inst0));
-                assert ($stable(o_inst1));
-                assert ($stable(pc));
-            end
-
-            // TODO: liveness
-
-            // cover different state transitions
-            // waiting for memory -> serving instruction
-            cover (f_past_valid && !$past(o_output_valid) && o_output_valid);
-            // waiting for memory -> still waiting
-            cover (f_past_valid && !$past(o_output_valid) && !o_output_valid);
-            // serving instruction -> still serving the same one
-            cover (f_past_valid && $past(o_output_valid) && o_past_valid && $stable(pc) && $stable(o_compressed) && $stable(o_inst0) && $stable(o_inst1));
-            // back to back dual issue of different insts (100% throughput)
-            cover (f_past_valid && $past(transmit) && $past(count) && transmit && count && !$stable(i_imem_rdata));
-        end
-    end
-`endif
-endmodule
-
-`default_nettype wire
