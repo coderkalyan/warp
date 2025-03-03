@@ -196,11 +196,13 @@ module warp_decode (
                     assert ($stable(o_bundle1));
                 end
 
+                // skid buffer state transitions
                 cover (f_load);
                 cover (f_flow);
                 cover (f_fill);
                 cover (f_unload);
                 cover (f_flush);
+                // ensure 100% throughput
                 cover (f_past_valid && $past(f_transmit) && f_transmit && $changed(o_bundle0) && $changed(o_bundle1));
             end
         end
