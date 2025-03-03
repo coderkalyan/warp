@@ -20,8 +20,8 @@ module warp_decode (
     // instructions (like an integrated skid buffer)
     input  wire        i_output_ready,
     output wire        o_output_valid,
-    output wire [BUNDLE_SIZE - 1:0] o_bundle0,
-    output wire [BUNDLE_SIZE - 1:0] o_bundle1
+    output wire [`BUNDLE_SIZE - 1:0] o_bundle0,
+    output wire [`BUNDLE_SIZE - 1:0] o_bundle1
 );
     wire [31:0] decode_inst     [1:0];
     wire        decode_legal    [1:0];
@@ -30,7 +30,7 @@ module warp_decode (
     wire [3:0]  decode_pipeline [1:0];
     wire [6:0]  decode_xarith   [1:0];
     wire [5:0]  decode_xlogic   [1:0];
-    wire [BUNDLE_SIZE - 1:0] decode_bundle [1:0];
+    wire [`BUNDLE_SIZE - 1:0] decode_bundle [1:0];
 
     // can't assign both of these inline due to verilog syntax limitations
     assign decode_inst[0] = i_inst0;
@@ -41,7 +41,7 @@ module warp_decode (
         for (i = 0; i < 2; i = i + 1) begin
             warp_udecode udecode (
                 .i_inst(decode_inst[i]),
-                .o_legal(decode_legal[i]),
+               .o_legal(decode_legal[i]),
                 .o_raddr(decode_raddr[i]),
                 .o_imm(decode_imm[i]),
                 .o_pipeline(decode_pipeline[i]),
@@ -52,32 +52,74 @@ module warp_decode (
         end
     endgenerate
 
+
     // decode always accepts two instructions (if available) but since issue
     // could stall, a skid buffer is required to hold the two instructions
     // until the !o_output_ready signal propogates up the pipeline to the fetch
+    //
+    // adapted from https://fpgacpu.ca/fpga/Pipeline_Skid_Buffer.html
+    wire insert = i_input_valid  && o_input_ready;
+    wire remove = o_output_valid && i_output_ready;
+    wire load  = (state == STATE_EMPTY) &&  insert && !remove;
+    wire flow  = (state == STATE_BUSY)  &&  insert &&  remove;
+    wire fill  = (state == STATE_BUSY)  &&  insert && !remove;
+    wire flush = (state == STATE_FULL)  && !insert &&  remove;
+
+    localparam STATE_EMPTY = 2'h0;
+    localparam STATE_BUSY  = 2'h1;
+    localparam STATE_FULL  = 2'h2;
+    reg [1:0] state, next_state;
+    always @(*) begin
+        next_state = state;
+
+        if (insert && !remove && (state != STATE_FULL))
+            next_state = state + 2'h1;
+        else if (!insert && remove && (state != STATE_EMPTY))
+            next_state = state - 2'h1;
+    end
+
+    always @(posedge i_clk, negedge i_rst_n) begin
+        if (!i_rst_n)
+            state <= STATE_EMPTY;
+        else
+            state <= next_state;
+    end
+
     reg ready, valid;
     always @(posedge i_clk, negedge i_rst_n) begin
         if (!i_rst_n) begin
             ready <= 1'b1;
             valid <= 1'b0;
         end else begin
-            ready <= i_output_ready;
-            valid <= i_input_valid;
+            ready <= next_state != STATE_FULL;
+            valid <= next_state != STATE_EMPTY;
         end
     end
 
     // the skid buffer always latches the decoded bundle when available, but
     // if there is no backpressure the latch is bypassed and bundles are
     // directly forwarded to output
-    reg [BUNDLE_SIZE - 1:0] fifo [1:0];
+    reg [`BUNDLE_SIZE - 1:0] fifo [1:0];
     always @(posedge i_clk, negedge i_rst_n) begin
         if (!i_rst_n) begin
-            fifo[0] <= {BUNDLE_SIZE{1'b0}};
-            fifo[1] <= {BUNDLE_SIZE{1'b0}};
-        end else if (i_input_valid) begin
+            fifo[0] <= 0;
+            fifo[1] <= 0;
+        end else if (fill) begin
             // FIXME: mux compressed/uncompressed once cdecode is working
             fifo[0] <= decode_bundle[0];
             fifo[1] <= decode_bundle[1];
+        end
+    end
+
+    // depending on if skidding or not, bypass or use fifo
+    reg [`BUNDLE_SIZE - 1:0] bundle [1:0];
+    always @(posedge i_clk, negedge i_rst_n) begin
+        if (!i_rst_n) begin
+            bundle[0] <= 0;
+            bundle[1] <= 0;
+        end else if (load || flow || flush) begin
+            bundle[0] <= flush ? fifo[0] : decode_bundle[0];
+            bundle[1] <= flush ? fifo[1] : decode_bundle[1];
         end
     end
 
@@ -85,11 +127,8 @@ module warp_decode (
     assign o_input_ready = ready;
     // if fetch is valid, decode is always valid one cycle later
     assign o_output_valid = valid;
-    // depending on if skidding or not, bypass or use fifo
-    wire skid = valid && !ready;
-    assign o_bundle0 = !ready ? bundle0;
-    assign o_bundle1 = bundle1;
-    assign o_count = count;
+    assign o_bundle0 = bundle[0];
+    assign o_bundle1 = bundle[1];
 
     `ifdef WARP_FORMAL
         reg f_past_valid;
@@ -98,73 +137,71 @@ module warp_decode (
 
         (* gclk *) reg formal_timestep;
 
+        initial assume (!i_clk);
+        initial assume (!i_rst_n);
 
-        reg f_valid, f_count;
-        initial f_valid <= 1'b0;
-
-        initial begin
-            assume (!i_clk);
-            assume (!i_rst_n);
-            assume (!i_input_valid);
-
-            assert (o_input_ready);
-            assert (!o_output_valid);
-        end
-
+        // ensure this is a synchronous interface
         always @(posedge formal_timestep) begin
-            if (!i_rst_n) begin
-                assume (!i_clk);
-                assume (!i_rst_n);
-                assume (!i_input_valid);
+            // asynchronous assert, synchronous deassert clock
+            if (f_past_valid && $rose(i_rst_n))
+                assume ($rose(i_clk));
 
-                assert (o_input_ready);
-                assert (!o_output_valid);
-            end
-
-            if (!$rose(i_clk)) begin
+            if (f_past_valid && !$rose(i_clk)) begin
                 assume ($stable(i_input_valid));
                 assume ($stable(i_inst0));
                 assume ($stable(i_inst1));
                 assume ($stable(i_compressed));
-                assume ($stable(i_count));
                 assume ($stable(i_output_ready));
             end
 
-            if (f_past_valid && !$changed(i_rst_n) && !$rose(i_clk)) begin
+            if (f_past_valid && i_rst_n && !$rose(i_clk)) begin
                 assert ($stable(o_input_ready));
                 assert ($stable(o_output_valid));
                 assert ($stable(o_bundle0));
                 assert ($stable(o_bundle1));
-                assert ($stable(o_count));
             end
         end
 
-        always @(posedge i_clk) begin
+        always @(*) begin
             if (!i_rst_n) begin
+                assume (!i_input_valid);
+                assume (!i_output_ready);
+
                 assert (o_input_ready);
                 assert (!o_output_valid);
-            end else begin
+            end
+        end
+
+        wire f_transmit = i_output_ready && o_output_valid;
+        wire f_load   = (state == STATE_EMPTY) &&  insert && !remove;
+        wire f_flow   = (state == STATE_BUSY)  &&  insert &&  remove;
+        wire f_fill   = (state == STATE_BUSY)  &&  insert && !remove;
+        wire f_unload = (state == STATE_BUSY)  && !insert &&  remove;
+        wire f_flush  = (state == STATE_FULL)  && !insert &&  remove;
+
+        always @(posedge i_clk) begin
+            if (i_rst_n) begin
                 // assume input interface doesn't drop instructions
                 if (f_past_valid && $past(i_input_valid) && !$past(o_input_ready)) begin
                     assume ($stable(i_input_valid));
+                    assume ($stable(i_compressed));
                     assume ($stable(i_inst0));
                     assume ($stable(i_inst1));
-                    assume ($stable(i_compressed));
-                    assume ($stable(i_count));
                 end
 
                 // downstream backpressure should not drop insts
                 if (f_past_valid && $past(o_output_valid) && !$past(i_output_ready)) begin
-                    a_backpressure1: assert ($stable(o_output_valid));
-                    a_backpressure2: assert ($stable(o_bundle0));
-                    a_backpressure3: assert ($stable(o_bundle1));
-                    a_backpressure4: assert ($stable(o_count));
+                    assert ($stable(o_output_valid));
+                    assert ($stable(o_bundle0));
+                    assert ($stable(o_bundle1));
                 end
 
-                if (o_input_ready && i_input_valid) begin
-                    f_valid <= 1'b1;
-                    f_count <= i_count;
-                end
+                cover (f_load);
+                cover (f_flow);
+                cover (f_fill);
+                cover (f_unload);
+                cover (f_flush);
+                cover (f_past_valid && $past(f_transmit) && f_transmit && $changed(o_bundle0) && $changed(o_bundle1));
             end
         end
     `endif
@@ -221,7 +258,7 @@ module warp_udecode (
     // [2]   = sub
     // [3]   = unsigned
     // [4]   = cmp_mode
-// [5]   = branch_equal
+    // [5]   = branch_equal
     // [6]   = branch_invert
     output wire [6:0]  o_xarith,
     // [2:0] = opsel
