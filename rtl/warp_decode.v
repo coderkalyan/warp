@@ -229,6 +229,13 @@ module warp_udecode (
     wire op_jal       = opcode == 5'b11011;
     wire op_system    = opcode == 5'b11100;
 
+    // funct7 selection
+    // this is effective to do here as one hot because
+    // the actual funct7 space is *extremely* sparse
+    wire funct7_none   = funct7 == 7'b0000000;
+    wire funct7_arith  = funct7 == 7'b0100000;
+    wire funct7_muldiv = funct7 == 7'b0000001;
+
     // immediate decoding
     wire format_r = op_op || op_op_32 || op_amo;
     wire format_i = op_op_imm || op_op_imm_32 || op_jalr || op_load;
@@ -263,6 +270,12 @@ module warp_udecode (
     reg [2:0] xlogic_opsel;
     reg xlogic_invert, xlogic_word;
     reg [1:0] xlogic_sll;
+    // xmultl control signals
+    reg xmultl_word;
+    // xmulth control signals
+    reg [1:0] xmulth_unsigned;
+    // xdiv control signals
+    reg xdiv_unsigned, xdiv_word;
     always @(*) begin
         legal = 1'b0;
         pipeline = 4'bxxxx;
@@ -277,6 +290,10 @@ module warp_udecode (
         xlogic_invert = 1'bx;
         xlogic_word = 1'bx;
         xlogic_sll = 2'bxx;
+        xmultl_word = 1'bx;
+        xmulth_unsigned = 1'bx;
+        xdiv_unsigned = 1'bx;
+        xdiv_word = 1'bx;
 
         case (1'b1)
             // addi, slti, sltiu, xori, ori, andi, slli, srli, srai
@@ -375,56 +392,73 @@ module warp_udecode (
                 xlogic_invert = 1'b0;
             end
             // add, sub, sll, slt, sltu, xor, srl, sra, or, and
+            // mul, mulh, mulhs, mulhsu
             op_op: begin
                 case (funct3)
-                    // add, sub
+                    // add, sub, mul
                     3'b000: begin
-                        legal = funct7 == 7'b0000000 || funct7 == 7'b0100000;
-                        pipeline = `PIPE_XARITH;
+                        legal = funct7 == 7'b0000000 || funct7 == 7'b0100000 || funct7 == 7'b0000001;
+                        pipeline = funct7[0] ? `PIPE_XMULTL : `PIPE_XARITH;
                         xarith_opsel = `XARITH_OP_ADD;
                         xarith_word = 1'b0;
+                        xmultl_word = 1'b0;
                     end
-                    // sll
+                    // sll, mulh
                     3'b001: begin
-                        legal = funct7 == 7'b0000000;
-                        pipeline = `PIPE_XLOGIC;
+                        legal = funct7 == 7'b0000000 || funct7 == 7'b0000001;
+                        pipeline = funct7[0] ? `PIPE_XMULTH : `PIPE_XLOGIC;
                         xlogic_opsel = `XLOGIC_OP_SHF;
                         xlogic_word = 1'b0;
+                        xmulth_unsigned = 2'b00;
+                        // FIXME: change to shift unit
                     end
-                    // slt, sltu
+                    // slt, sltu, mulhsu, mulhu
                     3'b010, 3'b011: begin
-                        legal = 1'b1;
-                        pipeline = `PIPE_XARITH;
+                        legal = funct7 == 7'b0000000 || funct7 == 7'b0000001;
+                        pipeline = funct7[0] ? `PIPE_XMULTH : `PIPE_XARITH;
                         xarith_opsel = `XARITH_OP_SLT;
+                        xarith_unsigned = funct3[0];
                         xarith_word = 1'b0;
+                        xmulth_unsigned = {funct3[0], 1'b1};
                     end
-                    // xor
+                    // xor, div
                     3'b100: begin
-                        legal = 1'b1;
-                        pipeline = `PIPE_XLOGIC;
+                        legal = funct7 == 7'b0000000 || funct7 == 7'b0000001;
+                        pipeline = funct7[0] ? `PIPE_XDIV : `PIPE_XLOGIC;
                         xlogic_opsel = `XLOGIC_OP_XOR;
                         xlogic_word = 1'b0;
+                        xdiv_unsigned = 1'b0;
+                        xdiv_word = 1'b0;
                     end
-                    // srl, sra
+                    // srl, sra, divu
                     3'b101: begin
-                        legal = funct7 == 7'b0000000 || funct7 == 7'b0100000;
-                        pipeline = `PIPE_XLOGIC;
+                        legal = funct7 == 7'b0000000 || funct7 == 7'b0100000 || funct7 == 7'b0000001;
+                        pipeline = funct7[0] ? `PIPE_XDIV : `PIPE_XLOGIC;
+                        // FIXME: change to shift unit
                         xlogic_opsel = `XLOGIC_OP_SHF;
                         xlogic_word = 1'b0;
+                        xdiv_unsigned = 1'b1;
+                        xdiv_word = 1'b0;
                     end
-                    // or
+                    // or, rem
                     3'b110: begin
-                        legal = 1'b1;
-                        pipeline = `PIPE_XLOGIC;
+                        legal = funct7 == 7'b0000000 || funct7 == 7'b0000001;
+                        pipeline = funct7[0] ? `PIPE_XDIV : `PIPE_XLOGIC;
                         xlogic_opsel = `XLOGIC_OP_OR;
                         xlogic_word = 1'b0;
+                        xdiv_unsigned = 1'b0;
+                        xdiv_word = 1'b0;
+                        // FIXME: select remainder
                     end
-                    // and
+                    // and, remu
                     3'b111: begin
-                        legal = 1'b1;
-                        pipeline = `PIPE_XLOGIC;
+                        legal = funct7 == 7'b0000000 || funct7 == 7'b0000001;
+                        pipeline = funct7[0] ? `PIPE_XDIV : `PIPE_XLOGIC;
                         xlogic_opsel = `XLOGIC_OP_AND;
                         xlogic_word = 1'b0;
+                        xdiv_unsigned = 1'b1;
+                        xdiv_word = 1'b0;
+                        // FIXME: select remainder
                     end
                 endcase
 
@@ -442,12 +476,13 @@ module warp_udecode (
             end
             op_op_32: begin
                 case (funct3)
-                    // addw, subw
+                    // addw, subw, mulw
                     3'b000: begin
-                        legal = funct7 == 7'b0000000 || funct7 == 7'b0100000;
-                        pipeline = `PIPE_XARITH;
+                        legal = funct7 == 7'b0000000 || funct7 == 7'b0100000 || funct7 == 7'b0000001;
+                        pipeline = funct7[0] ? `PIPE_XMULTL : `PIPE_XARITH;
                         xarith_opsel = `XARITH_OP_ADD;
                         xarith_word = 1'b1;
+                        xmultl_word = 1'b1;
                     end
                     // sllw
                     3'b001: begin
