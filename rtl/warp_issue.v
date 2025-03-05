@@ -143,15 +143,17 @@ module warp_issue (
     // need to be muxed to each functional unit, which is relatively cheap
     // if the functional unit is valid but not ready, issue stalls to maintain
     // in order dispatch
-    assign bundle0_pipe_xarith = bundle0_pipeline == `PIPE_XARITH;
-    assign bundle0_pipe_xlogic = bundle0_pipeline == `PIPE_XLOGIC;
-    assign bundle0_pipe_xmultl = bundle0_pipeline == `PIPE_XMULTL;
-    assign bundle0_pipe_xmulth = bundle0_pipeline == `PIPE_XMULTH;
-    assign bundle0_pipe_xdiv   = bundle0_pipeline == `PIPE_XDIV;
-    assign bundle0_pipe_xarith0 = bundle0_pipe_xarith;
-    assign bundle0_pipe_xarith1 = bundle0_pipe_xarith && !i_xarith0_ready;
-    assign bundle0_pipe_xlogic0 = bundle0_pipe_xlogic;
-    assign bundle0_pipe_xlogic1 = bundle0_pipe_xlogic && !i_xlogic0_ready;
+    // TODO: this means that the instruction will not obey read valid
+    // interface semantics, but thats *fine* as long as we test correctly
+    wire bundle0_pipe_xarith = bundle0_pipeline == `PIPE_XARITH;
+    wire bundle0_pipe_xlogic = bundle0_pipeline == `PIPE_XLOGIC;
+    wire bundle0_pipe_xmultl = bundle0_pipeline == `PIPE_XMULTL;
+    wire bundle0_pipe_xmulth = bundle0_pipeline == `PIPE_XMULTH;
+    wire bundle0_pipe_xdiv   = bundle0_pipeline == `PIPE_XDIV;
+    wire bundle0_pipe_xarith0 = bundle0_pipe_xarith;
+    wire bundle0_pipe_xarith1 = bundle0_pipe_xarith && !i_xarith0_ready;
+    wire bundle0_pipe_xlogic0 = bundle0_pipe_xlogic;
+    wire bundle0_pipe_xlogic1 = bundle0_pipe_xlogic && !i_xlogic0_ready;
 
     wire xarith0_opsel         = bundle0_pipe_xarith0 ? bundle0_xarith[1:0] : bundle1_xarith[1:0];
     wire xarith0_sub           = bundle0_pipe_xarith0 ? bundle0_xarith[2] : bundle1_xarith[2];
@@ -179,12 +181,17 @@ module warp_issue (
 
     // dispatch enable for instruction 0 just involves checking rs1, rs2, and
     // rd against the reservation register to avoid RAW and WAW hazards
+    // similar for instruction 1 but additional conflict logic below
     reg inst0_stall_rs1, inst0_stall_rs2, inst0_stall_rd; 
+    reg inst1_stall_rs1, inst1_stall_rs2, inst1_stall_rd; 
     integer i;
     always @(*) begin
         inst0_stall_rs1 = 1'b0;
         inst0_stall_rs2 = 1'b0;
-        inst0_stall_rd = 1'b0;
+        inst0_stall_rd  = 1'b0;
+        inst1_stall_rs1 = 1'b0;
+        inst1_stall_rs2 = 1'b0;
+        inst1_stall_rd  = 1'b0;
 
         for (i = 0; i < 32; i = i + 1) begin
             if ((i == bundle0_rs1) && reservation[i])
@@ -193,10 +200,41 @@ module warp_issue (
                 inst0_stall_rs2 = 1'b1;
             if ((i == bundle0_rd) && reservation[i])
                 inst0_stall_rd = 1'b1;
+
+            if ((i == bundle1_rs1) && reservation[i])
+                inst1_stall_rs1 = 1'b1;
+            if ((i == bundle1_rs2) && reservation[i])
+                inst1_stall_rs2 = 1'b1;
+            if ((i == bundle1_rd) && reservation[i])
+                inst1_stall_rd = 1'b1;
         end
     end
 
+    // instructions are ready once all their dependencies are ready
+    // this doesn't mean that they will dispatch, only that there are
+    // no data hazards wrt. instructions already in the backend pipeline
     wire bundle0_ready = !inst0_stall_rs1 && !inst0_stall_rs2 && !inst0_stall_rd;
+    wire bundle1_ready = !inst1_stall_rs1 && !inst1_stall_rs2 && !inst1_stall_rd;
+
+    // instruction 1 cannot dispatch if it writes to the same register as
+    // instruction 0, since this could cause a WAW hazard if instruction 1
+    // finishes first (can implement more complex logic here later on to
+    // improve many cases)
+    // FIXME: do we want a check against 0 here? check what RF does
+    wire bundle1_waw = bundle0_rd == bundle1_rd;
+
+    wire bundle1_pipe_xarith = bundle1_pipeline == `PIPE_XARITH;
+    wire bundle1_pipe_xlogic = bundle1_pipeline == `PIPE_XLOGIC;
+    wire bundle1_pipe_xmultl = bundle1_pipeline == `PIPE_XMULTL;
+    wire bundle1_pipe_xmulth = bundle1_pipeline == `PIPE_XMULTH;
+    wire bundle1_pipe_xdiv   = bundle1_pipeline == `PIPE_XDIV;
+    wire bundle1_pipe_xarith0 = !bundle1_pipe_xarith;
+    wire bundle1_pipe_xarith1 = bundle1_pipe_xarith && !i_xarith0_ready;
+    wire bundle1_pipe_xlogic0 = bundle1_pipe_xlogic;
+    wire bundle1_pipe_xlogic1 = bundle1_pipe_xlogic && !i_xlogic0_ready;
+
+    wire bundle0_dispatch = bundle0_ready;
+    wire bundle1_dispatch = bundle0_dispatch && bundle1_ready && !bundle1_waw;
 
     assign o_xarith0_opsel         = xarith0_opsel;
     assign o_xarith0_sub           = xarith0_sub;
@@ -204,7 +242,7 @@ module warp_issue (
     assign o_xarith0_cmp_mode      = xarith0_cmp_mode;
     assign o_xarith0_branch_equal  = xarith0_branch_equal;
     assign o_xarith0_branch_invert = xarith0_branch_invert;
-    assign o_xarith0_valid         = bundle0_pipe_xarith0 && bundle0_ready;
+    assign o_xarith0_valid         = (bundle0_pipe_xarith0 && bundle0_dispatch) || (bundle1_pipe_xarith0 && ;
 
     assign o_xarith1_opsel         = xarith1_opsel;
     assign o_xarith1_sub           = xarith1_sub;
