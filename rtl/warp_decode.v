@@ -48,7 +48,13 @@ module warp_decode (
                 .o_xarith(decode_xarith[i]),
                 .o_xlogic(decode_xlogic[i])
             );
-            assign decode_bundle[i] = {decode_legal[i], decode_raddr[i], decode_imm[i], decode_pipeline[i], decode_xarith[i], decode_xlogic[i]};
+
+            assign decode_bundle[ 0: 0] = decode_legal[i];
+            assign decode_bundle[15: 1] = decode_raddr[i];
+            assign decode_bundle[47:16] = decode_imm[i];
+            assign decode_bundle[51:48] = decode_pipeline[i];
+            assign decode_bundle[59:52] = decode_xarith[i];
+            assign decode_bundle[66:60] = decode_xlogic[i];
         end
     endgenerate
 
@@ -193,11 +199,13 @@ module warp_udecode (
     // [4]   = cmp_mode
     // [5]   = branch_equal
     // [6]   = branch_invert
-    output wire [6:0]  o_xarith,
+    // [7]   = word
+    output wire [7:0]  o_xarith,
     // [2:0] = opsel
     // [3]   = invert
     // [5:4] = sll
-    output wire [5:0]  o_xlogic
+    // [6]   = word
+    output wire [6:0]  o_xlogic
 );
     wire [4:0] opcode = i_inst[6:2];
     wire [4:0] rs1    = i_inst[19:15];
@@ -228,13 +236,6 @@ module warp_udecode (
     wire op_jalr      = opcode == 5'b11001;
     wire op_jal       = opcode == 5'b11011;
     wire op_system    = opcode == 5'b11100;
-
-    // funct7 selection
-    // this is effective to do here as one hot because
-    // the actual funct7 space is *extremely* sparse
-    wire funct7_none   = funct7 == 7'b0000000;
-    wire funct7_arith  = funct7 == 7'b0100000;
-    wire funct7_muldiv = funct7 == 7'b0000001;
 
     // immediate decoding
     wire format_r = op_op || op_op_32 || op_amo;
@@ -270,12 +271,6 @@ module warp_udecode (
     reg [2:0] xlogic_opsel;
     reg xlogic_invert, xlogic_word;
     reg [1:0] xlogic_sll;
-    // xmultl control signals
-    reg xmultl_word;
-    // xmulth control signals
-    reg [1:0] xmulth_unsigned;
-    // xdiv control signals
-    reg xdiv_unsigned, xdiv_word;
     always @(*) begin
         legal = 1'b0;
         pipeline = 4'bxxxx;
@@ -288,12 +283,8 @@ module warp_udecode (
         xarith_word = 1'bx;
         xlogic_opsel = 3'bxxx;
         xlogic_invert = 1'bx;
-        xlogic_word = 1'bx;
         xlogic_sll = 2'bxx;
-        xmultl_word = 1'bx;
-        xmulth_unsigned = 1'bx;
-        xdiv_unsigned = 1'bx;
-        xdiv_word = 1'bx;
+        xlogic_word = 1'bx;
 
         case (1'b1)
             // addi, slti, sltiu, xori, ori, andi, slli, srli, srai
@@ -392,73 +383,56 @@ module warp_udecode (
                 xlogic_invert = 1'b0;
             end
             // add, sub, sll, slt, sltu, xor, srl, sra, or, and
-            // mul, mulh, mulhs, mulhsu
             op_op: begin
                 case (funct3)
-                    // add, sub, mul
+                    // add, sub
                     3'b000: begin
-                        legal = funct7 == 7'b0000000 || funct7 == 7'b0100000 || funct7 == 7'b0000001;
-                        pipeline = funct7[0] ? `PIPE_XMULTL : `PIPE_XARITH;
+                        legal = funct7 == 7'b0000000 || funct7 == 7'b0100000;
+                        pipeline = `PIPE_XARITH;
                         xarith_opsel = `XARITH_OP_ADD;
                         xarith_word = 1'b0;
-                        xmultl_word = 1'b0;
                     end
-                    // sll, mulh
+                    // sll
                     3'b001: begin
-                        legal = funct7 == 7'b0000000 || funct7 == 7'b0000001;
-                        pipeline = funct7[0] ? `PIPE_XMULTH : `PIPE_XLOGIC;
+                        legal = funct7 == 7'b0000000;
+                        pipeline = `PIPE_XLOGIC;
                         xlogic_opsel = `XLOGIC_OP_SHF;
                         xlogic_word = 1'b0;
-                        xmulth_unsigned = 2'b00;
-                        // FIXME: change to shift unit
                     end
-                    // slt, sltu, mulhsu, mulhu
+                    // slt, sltu
                     3'b010, 3'b011: begin
-                        legal = funct7 == 7'b0000000 || funct7 == 7'b0000001;
-                        pipeline = funct7[0] ? `PIPE_XMULTH : `PIPE_XARITH;
+                        legal = 1'b1;
+                        pipeline = `PIPE_XARITH;
                         xarith_opsel = `XARITH_OP_SLT;
-                        xarith_unsigned = funct3[0];
                         xarith_word = 1'b0;
-                        xmulth_unsigned = {funct3[0], 1'b1};
                     end
-                    // xor, div
+                    // xor
                     3'b100: begin
-                        legal = funct7 == 7'b0000000 || funct7 == 7'b0000001;
-                        pipeline = funct7[0] ? `PIPE_XDIV : `PIPE_XLOGIC;
+                        legal = 1'b1;
+                        pipeline = `PIPE_XLOGIC;
                         xlogic_opsel = `XLOGIC_OP_XOR;
                         xlogic_word = 1'b0;
-                        xdiv_unsigned = 1'b0;
-                        xdiv_word = 1'b0;
                     end
-                    // srl, sra, divu
+                    // srl, sra
                     3'b101: begin
-                        legal = funct7 == 7'b0000000 || funct7 == 7'b0100000 || funct7 == 7'b0000001;
-                        pipeline = funct7[0] ? `PIPE_XDIV : `PIPE_XLOGIC;
-                        // FIXME: change to shift unit
+                        legal = funct7 == 7'b0000000 || funct7 == 7'b0100000;
+                        pipeline = `PIPE_XLOGIC;
                         xlogic_opsel = `XLOGIC_OP_SHF;
                         xlogic_word = 1'b0;
-                        xdiv_unsigned = 1'b1;
-                        xdiv_word = 1'b0;
                     end
-                    // or, rem
+                    // or
                     3'b110: begin
-                        legal = funct7 == 7'b0000000 || funct7 == 7'b0000001;
-                        pipeline = funct7[0] ? `PIPE_XDIV : `PIPE_XLOGIC;
+                        legal = 1'b1;
+                        pipeline = `PIPE_XLOGIC;
                         xlogic_opsel = `XLOGIC_OP_OR;
                         xlogic_word = 1'b0;
-                        xdiv_unsigned = 1'b0;
-                        xdiv_word = 1'b0;
-                        // FIXME: select remainder
                     end
-                    // and, remu
+                    // and
                     3'b111: begin
-                        legal = funct7 == 7'b0000000 || funct7 == 7'b0000001;
-                        pipeline = funct7[0] ? `PIPE_XDIV : `PIPE_XLOGIC;
+                        legal = 1'b1;
+                        pipeline = `PIPE_XLOGIC;
                         xlogic_opsel = `XLOGIC_OP_AND;
                         xlogic_word = 1'b0;
-                        xdiv_unsigned = 1'b1;
-                        xdiv_word = 1'b0;
-                        // FIXME: select remainder
                     end
                 endcase
 
@@ -476,13 +450,12 @@ module warp_udecode (
             end
             op_op_32: begin
                 case (funct3)
-                    // addw, subw, mulw
+                    // addw, subw
                     3'b000: begin
-                        legal = funct7 == 7'b0000000 || funct7 == 7'b0100000 || funct7 == 7'b0000001;
-                        pipeline = funct7[0] ? `PIPE_XMULTL : `PIPE_XARITH;
+                        legal = funct7 == 7'b0000000 || funct7 == 7'b0100000;
+                        pipeline = `PIPE_XARITH;
                         xarith_opsel = `XARITH_OP_ADD;
                         xarith_word = 1'b1;
-                        xmultl_word = 1'b1;
                     end
                     // sllw
                     3'b001: begin
@@ -516,9 +489,11 @@ module warp_udecode (
     assign o_xarith[4]   = xarith_cmp_mode;
     assign o_xarith[5]   = xarith_branch_equal;
     assign o_xarith[6]   = xarith_branch_invert;
+    assign o_xarith[7]   = xarith_word;
     assign o_xlogic[2:0] = xlogic_opsel;
     assign o_xlogic[3]   = xlogic_invert;
     assign o_xlogic[5:4] = xlogic_sll;
+    assign o_xlogic[6]   = xlogic_word;
 endmodule
 
 /*
