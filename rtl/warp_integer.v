@@ -2,10 +2,6 @@
 
 `include "warp_defines.v"
 
-`define XSHIFT_OP_SHL 2'b00
-`define XSHIFT_OP_SHR 2'b01
-`define XSHIFT_OP_ROL 2'b10
-`define XSHIFT_OP_ROR 2'b11
 
 // scalar integer arithmetic unit - add/sub, set less than, min/max, branch
 module warp_xarith (
@@ -14,7 +10,7 @@ module warp_xarith (
     // `XARITH_OP_ADD: o_result = i_op1 +/- i_op2
     // `XARITH_OP_SLT: o_result = (i_op1 < i_op2) ? 1'b1 : 1'b0
     // `XARITH_OP_CMP: o_result = min/max(i_op1, i_op2)
-    input  wire [1:0]  i_opsel,
+    input  wire [ 1:0] i_opsel,
     // subtract mode: when asserted, negate i_op2 before adding
     // only used for OP_ADD
     input  wire        i_sub,
@@ -48,7 +44,7 @@ module warp_xarith (
     assign add_result[31:0]  = sum[31:0];
 
     // comparison
-    wire lt  = sum[63];
+    wire lt = sum[63];
     wire ltu = sum[64];
     wire slt = i_unsigned ? ltu : lt;
     wire [63:0] slt_result = {63'h0, slt};
@@ -88,7 +84,7 @@ module warp_xlogic (
     // `XLOGIC_OP_CLZ: o_result = leadingzeros(i_op1)
     // `XLOGIC_OP_CTZ: o_result = trailingzeros(i_op1)
     // `XLOGIC_OP_POP: o_result = popcount(i_op1)
-    input  wire [2:0]  i_opsel,
+    input  wire [ 2:0] i_opsel,
     // when asserted, invert (logical not) i_op2
     // implements andnot, ornot, and xnor
     // only used for OP_AND, OR_OR, OP_XOR
@@ -96,7 +92,7 @@ module warp_xlogic (
     // number of bits to shift i_op1 left by before adding i_op2
     // used for address generation (2/4/8 * base + offset)
     // only used for OP_SLA
-    input  wire [1:0]  i_sll,
+    input  wire [ 1:0] i_sll,
     // when asserted, operate on lower 32 bits only of i_op1 and i_op2 and
     // sign extend the result to 64 bits
     // only used for OP_SHF
@@ -106,21 +102,21 @@ module warp_xlogic (
     // and/or with conditional invert of op2
     wire [63:0] op2 = i_op2 ^ {64{i_invert}};
     wire [63:0] and_result = i_op1 & op2;
-    wire [63:0] or_result  = i_op1 | op2;
-    wire [63:0] xor_result = i_op1 ^ op2; // i_op1 ^ ~i_op2 == i_op1 ~^ i_op2
+    wire [63:0] or_result = i_op1 | op2;
+    wire [63:0] xor_result = i_op1 ^ op2;  // i_op1 ^ ~i_op2 == i_op1 ~^ i_op2
 
     // shift left 1/2/3 (2 bits operand) + add (address generation)
     wire [63:0] sl1 = i_sll[1] ? {i_op1[61:0], 2'b00} : i_op1;
     wire [63:0] sl0 = i_sll[0] ? {sl1[62:0], 1'b0} : sl1;
     wire [63:0] sla_result = sl0 + i_op2;
 
-    reg [63:0] result;
+    reg  [63:0] result;
     always @(*) begin
         result = 64'hx;
 
         case (i_opsel)
             `XLOGIC_OP_AND: result = and_result;
-            `XLOGIC_OP_OR:  result = or_result;
+            `XLOGIC_OP_OR: result = or_result;
             `XLOGIC_OP_XOR: result = xor_result;
             `XLOGIC_OP_SHF: result = shift_result;
             `XLOGIC_OP_SLA: result = sla_result;
@@ -137,23 +133,121 @@ endmodule
 // employ a "done" signal and expects the parent issue logic to
 // expect a value with the given delay
 module warp_xshift (
-    input  wire        i_clk,
-    input  wire        i_rst_n,
-    input  wire [63:0] i_operand,
-    input  wire [5:0]  i_amount,
+    input wire        i_clk,
+    input wire        i_rst_n,
+    input wire [63:0] i_operand,
+    input wire [ 5:0] i_amount,
+
     // `XSHIFT_OP_SHL: o_result = i_operand << i_amount
     // `XSHIFT_OP_SHR: o_result = i_operand >>/>>> i_amount
     // `XSHIFT_OP_ROL: o_result = i_operand rol i_amount
     // `XSHIFT_OP_ROR: o_result = i_operand ror i_amount
-    input  wire [1:0]  i_opsel,
+    input wire [1:0] i_opsel,
+
     // if asserted, shift right arithmetic instead of logical (>>/>>>)
     // only used for OP_SHR
-    input  wire        i_arithmetic,
+    input wire i_arithmetic,
+
     // when asserted, operate on lower 32 bits only of operands and
     // sign extend the result to 64 bits
     input  wire        i_word,
     output wire [63:0] o_result
 );
+    // Internal wires for each shift stage
+    wire [63:0] stage0_out, stage1_out, stage2_out, stage3_out, stage4_out;
+    wire [31:0] stage0_out_32_rotate, stage1_out_32_rotate, stage2_out_32_rotate, stage3_out_32_rotate, stage4_out_32_rotate;
+    wire [63:0] operand_in;
+    wire [63:0] o_result_tmp;
+    wire [63:0] rotated_out;
+
+    // Handle 32-bit word mode for shift left and shift right
+    assign o_result = i_word ? (
+        (i_word & (i_opsel == `XSHIFT_OP_ROL) | (i_opsel == `XSHIFT_OP_ROR)) ? rotated_out:
+        {{32{o_result_tmp[31]}}, o_result_tmp[31:0]}
+    ) : o_result_tmp;
+    assign operand_in = i_word ? {{32{i_operand[31]}}, i_operand[31:0]} : i_operand;
+
+    // Barrel shifter stages
+    // Stage 0: shift by 1
+    assign stage0_out = (i_amount[0]) ? (
+        (i_opsel == `XSHIFT_OP_SHL) ? {operand_in[62:0], 1'b0} :
+        (i_opsel == `XSHIFT_OP_SHR) ? {(i_arithmetic & operand_in[63]), operand_in[63:1]} :
+        (i_opsel == `XSHIFT_OP_ROL) ? {operand_in[62:0], operand_in[63]} :
+        {operand_in[0], operand_in[63:1]}
+    ) : operand_in;
+
+    // Stage 1: shift by 2
+    assign stage1_out = (i_amount[1]) ? (
+        (i_opsel == `XSHIFT_OP_SHL) ? {stage0_out[61:0], 2'b0} :
+        (i_opsel == `XSHIFT_OP_SHR) ? {{2{i_arithmetic & stage0_out[63]}}, stage0_out[63:2]} :
+        (i_opsel == `XSHIFT_OP_ROL) ? {stage0_out[61:0], stage0_out[63:62]} :
+        {stage0_out[1:0], stage0_out[63:2]}
+    ) : stage0_out;
+
+    // Stage 2: shift by 4
+    assign stage2_out = (i_amount[2]) ? (
+        (i_opsel == `XSHIFT_OP_SHL) ? {stage1_out[59:0], 4'b0} :
+        (i_opsel == `XSHIFT_OP_SHR) ? {{4{i_arithmetic & stage1_out[63]}}, stage1_out[63:4]} :
+        (i_opsel == `XSHIFT_OP_ROL) ? {stage1_out[59:0], stage1_out[63:60]} :
+        {stage1_out[3:0], stage1_out[63:4]}
+    ) : stage1_out;
+
+    // Stage 3: shift by 8
+    assign stage3_out = (i_amount[3]) ? (
+        (i_opsel == `XSHIFT_OP_SHL) ? {stage2_out[55:0], 8'b0} :
+        (i_opsel == `XSHIFT_OP_SHR) ? {{8{i_arithmetic & stage2_out[63]}}, stage2_out[63:8]} :
+        (i_opsel == `XSHIFT_OP_ROL) ? {stage2_out[55:0], stage2_out[63:56]} :
+        {stage2_out[7:0], stage2_out[63:8]}
+    ) : stage2_out;
+
+    // Stage 4: shift by 16
+    assign stage4_out = (i_amount[4]) ? (
+        (i_opsel == `XSHIFT_OP_SHL) ? {stage3_out[47:0], 16'b0} :
+        (i_opsel == `XSHIFT_OP_SHR) ? {{16{i_arithmetic & stage3_out[63]}}, stage3_out[63:16]} :
+        (i_opsel == `XSHIFT_OP_ROL) ? {stage3_out[47:0], stage3_out[63:48]} :
+        {stage3_out[15:0], stage3_out[63:16]}
+    ) : stage3_out;
+
+    // Final stage: shift by 32
+    assign o_result_tmp = (i_amount[5] & ~i_word) ? (
+        (i_opsel == `XSHIFT_OP_SHL) ? {stage4_out[31:0], 32'b0} :
+        (i_opsel == `XSHIFT_OP_SHR) ? {{32{i_arithmetic & stage4_out[63]}}, stage4_out[63:32]} :
+        (i_opsel == `XSHIFT_OP_ROL) ? {stage4_out[31:0], stage4_out[63:32]} :
+        {stage4_out[31:0], stage4_out[63:32]}
+    ) : stage4_out;
+
+    // Stage 0: shift by 1 (32 bit)
+    assign stage0_out_32_rotate = (i_amount[0]) ? (
+    (i_opsel == `XSHIFT_OP_ROL) ? {operand_in[30:0], operand_in[31]} : // Rotate Left by 1
+        {operand_in[0], operand_in[31:1]}  // Rotate Right by 1
+        ) : operand_in;
+
+    // Stage 1: shift by 2 (32 bit)
+    assign stage1_out_32_rotate = (i_amount[1]) ? (
+    (i_opsel == `XSHIFT_OP_ROL) ? {stage0_out_32_rotate[29:0], stage0_out_32_rotate[31:30]} : // Rotate Left by 2
+        {stage0_out_32_rotate[1:0], stage0_out_32_rotate[31:2]}  // Rotate Right by 2
+        ) : stage0_out_32_rotate;
+
+    // Stage 2: shift by 4 (32 bit)
+    assign stage2_out_32_rotate = (i_amount[2]) ? (
+    (i_opsel == `XSHIFT_OP_ROL) ? {stage1_out_32_rotate[27:0], stage1_out_32_rotate[31:28]} : // Rotate Left by 4
+        {stage1_out_32_rotate[3:0], stage1_out_32_rotate[31:4]}  // Rotate Right by 4
+        ) : stage1_out_32_rotate;
+
+    // Stage 3: shift by 8 (32 bit)
+    assign stage3_out_32_rotate = (i_amount[3]) ? (
+    (i_opsel == `XSHIFT_OP_ROL) ? {stage2_out_32_rotate[23:0], stage2_out_32_rotate[31:24]} : // Rotate Left by 8
+        {stage2_out_32_rotate[7:0], stage2_out_32_rotate[31:8]}  // Rotate Right by 8
+        ) : stage2_out_32_rotate;
+
+    // Stage 4: shift by 16 (32 bit)
+    assign stage4_out_32_rotate = (i_amount[4]) ? (
+    (i_opsel == `XSHIFT_OP_ROL) ? {stage3_out_32_rotate[15:0], stage3_out_32_rotate[31:16]} : // Rotate Left by 16
+        {stage3_out_32_rotate[15:0], stage3_out_32_rotate[31:16]}  // Rotate Right by 16
+        ) : stage3_out_32_rotate;
+
+    // Final output
+    assign rotated_out = {{32{stage4_out_32_rotate[31]}}, stage4_out_32_rotate};
 endmodule
 
 // multiplies two 64 bit operands and outputs the lower 64 bits of
@@ -193,7 +287,7 @@ module warp_xmulth (
     // when asserted, the corresponding operand is treated
     // as unsigned instead of signed
     // this is used to implement mulhu and mulhsu
-    input  wire [1:0]  i_unsigned,
+    input  wire [ 1:0] i_unsigned,
     // when asserted, o_result contains the result of the most
     // recently completed multiply
     output wire        o_valid,
@@ -237,12 +331,12 @@ endmodule
 // poorly to FPGAs and needs to be internally reworked
 module warp_xrf (
     input  wire        i_clk,
-    input  wire [4:0]  i_rs1_addr,
-    input  wire [4:0]  i_rs2_addr,
-    input  wire [4:0]  i_rs3_addr,
-    input  wire [4:0]  i_rs4_addr,
-    input  wire [4:0]  i_rd1_addr,
-    input  wire [4:0]  i_rd2_addr,
+    input  wire [ 4:0] i_rs1_addr,
+    input  wire [ 4:0] i_rs2_addr,
+    input  wire [ 4:0] i_rs3_addr,
+    input  wire [ 4:0] i_rs4_addr,
+    input  wire [ 4:0] i_rd1_addr,
+    input  wire [ 4:0] i_rd2_addr,
     input  wire [63:0] i_rd1_wdata,
     input  wire [63:0] i_rd2_wdata,
     input  wire        i_rd1_wen,
@@ -252,44 +346,30 @@ module warp_xrf (
     output wire [63:0] o_rs3_rdata,
     output wire [63:0] o_rs4_rdata
 );
-    reg [63:0] file [30:0];
+    reg [63:0] file[30:0];
     reg [63:0] rs1_rdata, rs2_rdata, rs3_rdata, rs4_rdata;
     always @(posedge i_clk) begin
         begin
             // implement bypassing for all read ports, assumes
             // rd1 != rd2
-            if (i_rd1_wen && (i_rs1_addr == i_rd1_addr))
-                rs1_rdata <= i_rd1_wdata;
-            else if (i_rd2_wen && (i_rs1_addr == i_rd2_addr))
-                rs1_rdata <= i_rd2_wdata;
-            else
-                rs1_rdata <= file[~i_rs1_addr];
+            if (i_rd1_wen && (i_rs1_addr == i_rd1_addr)) rs1_rdata <= i_rd1_wdata;
+            else if (i_rd2_wen && (i_rs1_addr == i_rd2_addr)) rs1_rdata <= i_rd2_wdata;
+            else rs1_rdata <= file[~i_rs1_addr];
 
-            if (i_rd1_wen && (i_rs2_addr == i_rd1_addr))
-                rs2_rdata <= i_rd1_wdata;
-            else if (i_rd2_wen && (i_rs2_addr == i_rd2_addr))
-                rs2_rdata <= i_rd2_wdata;
-            else
-                rs2_rdata <= file[~i_rs2_addr];
+            if (i_rd1_wen && (i_rs2_addr == i_rd1_addr)) rs2_rdata <= i_rd1_wdata;
+            else if (i_rd2_wen && (i_rs2_addr == i_rd2_addr)) rs2_rdata <= i_rd2_wdata;
+            else rs2_rdata <= file[~i_rs2_addr];
 
-            if (i_rd1_wen && (i_rs3_addr == i_rd1_addr))
-                rs3_rdata <= i_rd1_wdata;
-            else if (i_rd2_wen && (i_rs3_addr == i_rd2_addr))
-                rs3_rdata <= i_rd2_wdata;
-            else
-                rs3_rdata <= file[~i_rs3_addr];
+            if (i_rd1_wen && (i_rs3_addr == i_rd1_addr)) rs3_rdata <= i_rd1_wdata;
+            else if (i_rd2_wen && (i_rs3_addr == i_rd2_addr)) rs3_rdata <= i_rd2_wdata;
+            else rs3_rdata <= file[~i_rs3_addr];
 
-            if (i_rd1_wen && (i_rs4_addr == i_rd1_addr))
-                rs4_rdata <= i_rd1_wdata;
-            else if (i_rd2_wen && (i_rs4_addr == i_rd2_addr))
-                rs4_rdata <= i_rd2_wdata;
-            else
-                rs4_rdata <= file[~i_rs4_addr];
+            if (i_rd1_wen && (i_rs4_addr == i_rd1_addr)) rs4_rdata <= i_rd1_wdata;
+            else if (i_rd2_wen && (i_rs4_addr == i_rd2_addr)) rs4_rdata <= i_rd2_wdata;
+            else rs4_rdata <= file[~i_rs4_addr];
 
-            if (i_rd1_wen)
-                file[~i_rd1_addr] <= i_rd1_wdata;
-            if (i_rd2_wen)
-                file[~i_rd2_addr] <= i_rd2_wdata;
+            if (i_rd1_wen) file[~i_rd1_addr] <= i_rd1_wdata;
+            if (i_rd2_wen) file[~i_rd2_addr] <= i_rd2_wdata;
         end
     end
 
