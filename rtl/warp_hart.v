@@ -61,6 +61,42 @@ module warp_hart #(
             id_bundle1 <= decode_bundle1;
         end
     end
+
+    wire        is_valid;
+    wire [4:0]  rs1_addr, rs2_addr, rs3_addr, rs4_addr;
+    wire [1:0]  xarith_opsel;
+    wire        xarith_banksel, xarith_op2_sel;
+    wire        xarith_sub, xarith_unsigned, xarith_cmp_mode, xarith_branch_equal;
+    wire        xarith_branch_invert, xarith_word;
+    wire [2:0]  xlogic_opsel;
+    wire        xlogic_banksel, xlogic_op2_sel;
+    wire        xlogic_invert, xlogic_word;
+    wire [1:0]  xlogic_sll;
+    wire [31:0] inst0_retire, inst1_retire;
+    warp_issue issue (
+        .i_clk(i_clk), .i_rst_n(i_rst_n),
+        .o_input_ready(is_ready), .i_input_valid(is_valid),
+        .i_bundle0(id_bundle0), .i_bundle1(id_bundle1),
+        .o_rs1_addr(rs1_addr), .o_rs2_addr(rs2_addr),
+        .o_rs3_addr(rs3_addr), .o_rs4_addr(rs4_addr),
+        .o_xarith_banksel(xarith_banksel),
+        .o_xarith_op2_sel(xarith_op2_sel),
+        .o_xarith_opsel(xarith_opsel),
+        .o_xarith_sub(xarith_sub),
+        .o_xarith_unsigned(xarith_unsigned),
+        .o_xarith_cmp_mode(xarith_cmp_mode),
+        .o_xarith_branch_equal(xarith_branch_equal),
+        .o_xarith_branch_invert(xarith_branch_invert),
+        .o_xarith_word(xarith_word),
+        .o_xlogic_banksel(xlogic_banksel),
+        .o_xlogic_op2_sel(xlogic_op2_sel),
+        .o_xlogic_opsel(xlogic_opsel),
+        .o_xlogic_invert(xlogic_invert),
+        .o_xlogic_sll(xlogic_sll),
+        .o_xlogic_word(xlogic_word),
+        .i_inst0_retire(inst0_retire),
+        .i_inst1_retire(inst1_retire)
+    );
 endmodule
 
 `default_nettype wire
