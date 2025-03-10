@@ -11,12 +11,17 @@
 module warp_xarith (
     input  wire        i_clk,
     input  wire        i_rst_n,
+    // FIXME: document this
+    input  wire        i_valid,
     input  wire [63:0] i_op1,
     input  wire [63:0] i_op2,
+    // destination register is passed through the execution unit to track
+    // the write back location, but is not used or modified by this unit
+    input  wire [ 4:0] i_rd,
     // `XARITH_OP_ADD: o_result = i_op1 +/- i_op2
     // `XARITH_OP_SLT: o_result = (i_op1 < i_op2) ? 1'b1 : 1'b0
     // `XARITH_OP_CMP: o_result = min/max(i_op1, i_op2)
-    input  wire [1:0]  i_opsel,
+    input  wire [ 1:0] i_opsel,
     // subtract mode: when asserted, negate i_op2 before adding
     // only used for OP_ADD
     input  wire        i_sub,
@@ -38,12 +43,14 @@ module warp_xarith (
     // sign extend the result to 64 bits
     // only used for OP_ADD
     input  wire        i_word,
+    output wire        o_valid,
     output wire [63:0] o_result,
-    output wire        o_branch
+    output wire        o_branch,
+    output wire [ 4:0] o_rd
 );
     // add/sub
     wire [64:0] add_op1 = {i_op1[63], i_op1};
-    wire [64:0] add_op2 = {i_op2[63], i_op2} & {65{i_sub}};
+    wire [64:0] add_op2 = {i_op2[63], i_op2} ^ {65{i_sub}};
     wire [64:0] sum = add_op1 + add_op2 + i_sub;
     wire [63:0] add_result;
     assign add_result[63:32] = i_word ? {32{sum[31]}} : sum[63:32];
@@ -75,13 +82,40 @@ module warp_xarith (
         endcase
     end
 
-    assign o_branch = branch;
-    assign o_result = result;
+    reg        r_valid;
+    reg [63:0] r_result;
+    reg        r_branch;
+    reg [4:0]  r_rd;
+    always @(posedge i_clk, negedge i_rst_n) begin
+        if (!i_rst_n) begin
+            r_valid <= 1'b0;
+            r_result <= 64'h0;
+            r_branch <= 1'b0;
+            r_rd <= 5'd0;
+        end else begin
+            r_valid <= i_valid;
+            r_result <= result;
+            r_branch <= branch;
+            r_rd <= i_rd;
+        end
+    end
+
+    assign o_valid  = r_valid;
+    assign o_branch = r_branch;
+    assign o_result = r_result;
+    assign o_rd     = r_rd;
 endmodule
 
 module warp_xlogic (
+    input  wire        i_clk,
+    input  wire        i_rst_n,
+    // FIXME: document this
+    input  wire        i_valid,
     input  wire [63:0] i_op1,
     input  wire [63:0] i_op2,
+    // destination register is passed through the execution unit to track
+    // the write back location, but is not used or modified by this unit
+    input  wire [ 4:0] i_rd,
     // `XLOGIC_OP_AND: o_result = i_op1 & i_op2
     // `XLOGIC_OP_OR : o_result = i_op1 | i_op2
     // `XLOGIC_OP_XOR: o_result = i_op1 ^ i_op2
@@ -103,7 +137,9 @@ module warp_xlogic (
     // sign extend the result to 64 bits
     // only used for OP_SHF
     input  wire        i_word,
-    output wire [63:0] o_result
+    output wire        o_valid,
+    output wire [63:0] o_result,
+    output wire [ 4:0] o_rd
 );
     // and/or with conditional invert of op2
     wire [63:0] op2 = i_op2 ^ {64{i_invert}};
@@ -130,7 +166,24 @@ module warp_xlogic (
         endcase
     end
 
-    assign o_result = result;
+    reg        r_valid;
+    reg [63:0] r_result;
+    reg [4:0]  r_rd;
+    always @(posedge i_clk, negedge i_rst_n) begin
+        if (!i_rst_n) begin
+            r_valid <= 1'b0;
+            r_result <= 64'h0;
+            r_rd <= 5'd0;
+        end else begin
+            r_valid <= i_valid;
+            r_result <= result;
+            r_rd <= i_rd;
+        end
+    end
+
+    assign o_valid  = r_valid;
+    assign o_result = r_result;
+    assign o_rd     = r_rd;
 endmodule
 
 // latency: 2 cycles
@@ -239,25 +292,32 @@ endmodule
 // poorly to FPGAs and needs to be internally reworked
 module warp_xrf (
     input  wire        i_clk,
+    input  wire        i_rst_n,
+    // 4 port synchronous read
     input  wire [4:0]  i_rs1_addr,
     input  wire [4:0]  i_rs2_addr,
     input  wire [4:0]  i_rs3_addr,
     input  wire [4:0]  i_rs4_addr,
-    input  wire [4:0]  i_rd1_addr,
-    input  wire [4:0]  i_rd2_addr,
-    input  wire [63:0] i_rd1_wdata,
-    input  wire [63:0] i_rd2_wdata,
-    input  wire        i_rd1_wen,
-    input  wire        i_rd2_wen,
     output wire [63:0] o_rs1_rdata,
     output wire [63:0] o_rs2_rdata,
     output wire [63:0] o_rs3_rdata,
-    output wire [63:0] o_rs4_rdata
+    output wire [63:0] o_rs4_rdata,
+    // 2 port synchronous write with enable
+    input  wire        i_rd1_wen,
+    input  wire        i_rd2_wen,
+    input  wire [4:0]  i_rd1_addr,
+    input  wire [4:0]  i_rd2_addr,
+    input  wire [63:0] i_rd1_wdata,
+    input  wire [63:0] i_rd2_wdata
 );
-    reg [63:0] file [30:0];
+    reg [63:0] file [31:0];
     reg [63:0] rs1_rdata, rs2_rdata, rs3_rdata, rs4_rdata;
-    always @(posedge i_clk) begin
-        begin
+    integer i;
+    always @(posedge i_clk, negedge i_rst_n) begin
+        if (!i_rst_n) begin
+            for (i = 0; i < 31; i = i + 1)
+                file[i] <= 64'h0;
+        end else begin
             // implement bypassing for all read ports, assumes
             // rd1 != rd2
             if (i_rd1_wen && (i_rs1_addr == i_rd1_addr))
@@ -265,33 +325,33 @@ module warp_xrf (
             else if (i_rd2_wen && (i_rs1_addr == i_rd2_addr))
                 rs1_rdata <= i_rd2_wdata;
             else
-                rs1_rdata <= file[~i_rs1_addr];
+                rs1_rdata <= file[i_rs1_addr];
 
             if (i_rd1_wen && (i_rs2_addr == i_rd1_addr))
                 rs2_rdata <= i_rd1_wdata;
             else if (i_rd2_wen && (i_rs2_addr == i_rd2_addr))
                 rs2_rdata <= i_rd2_wdata;
             else
-                rs2_rdata <= file[~i_rs2_addr];
+                rs2_rdata <= file[i_rs2_addr];
 
             if (i_rd1_wen && (i_rs3_addr == i_rd1_addr))
                 rs3_rdata <= i_rd1_wdata;
             else if (i_rd2_wen && (i_rs3_addr == i_rd2_addr))
                 rs3_rdata <= i_rd2_wdata;
             else
-                rs3_rdata <= file[~i_rs3_addr];
+                rs3_rdata <= file[i_rs3_addr];
 
             if (i_rd1_wen && (i_rs4_addr == i_rd1_addr))
                 rs4_rdata <= i_rd1_wdata;
             else if (i_rd2_wen && (i_rs4_addr == i_rd2_addr))
                 rs4_rdata <= i_rd2_wdata;
             else
-                rs4_rdata <= file[~i_rs4_addr];
+                rs4_rdata <= file[i_rs4_addr];
 
             if (i_rd1_wen)
-                file[~i_rd1_addr] <= i_rd1_wdata;
+                file[i_rd1_addr] <= i_rd1_wdata;
             if (i_rd2_wen)
-                file[~i_rd2_addr] <= i_rd2_wdata;
+                file[i_rd2_addr] <= i_rd2_wdata;
         end
     end
 

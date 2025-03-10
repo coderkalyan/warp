@@ -27,6 +27,6 @@
 `define AHB_HTRANS_SEQ    2'b11
 
 `define CANONICAL_NOP 32'h00000013
-`define BUNDLE_SIZE 67
+`define BUNDLE_SIZE 68
 
 `endif

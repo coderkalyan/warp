@@ -31,14 +31,24 @@ module warp_hart_tb ();
         @(posedge clk); // fetch
 
         imem_valid = 1;
-        imem_rdata = {32'h001000b3, 32'h00100133};
+        // 32'h08200113 for addi (stalls because of backend throughput)
+        imem_rdata = {32'h08206113, 32'h07800093};
         @(posedge clk); // decode
 
+        // imem_rdata = {32'h03206213, 32'h1c200193};
         imem_valid = 0;
         imem_rdata = 0;
         @(posedge clk); // issue
 
+        imem_valid = 0;
+        imem_rdata = 0;
         @(posedge clk); // execute
+
+        @(posedge clk); // write back
+
+        @(posedge clk); // done
+        $display("%x", hart.xrf.file[1]);
+        $display("%x", hart.xrf.file[2]);
 
         $finish;
     end
