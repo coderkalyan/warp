@@ -106,7 +106,7 @@ module warp_issue (
     // pipeline destination
     wire        bundle0_legal    = i_bundle0[ 0: 0];
     wire [14:0] bundle0_raddr    = i_bundle0[15: 1];
-    wire [31:0] bundle0_imm      = i_bundle0[47:16];
+    wire [31:0] bundle0_imm32    = i_bundle0[47:16];
     wire [ 3:0] bundle0_pipeline = i_bundle0[51:48];
     wire [ 0:0] bundle0_shared   = i_bundle0[52:52];
     wire [ 7:0] bundle0_xarith   = i_bundle0[60:53];
@@ -114,11 +114,18 @@ module warp_issue (
 
     wire        bundle1_legal    = i_bundle1[ 0: 0];
     wire [14:0] bundle1_raddr    = i_bundle1[15: 1];
-    wire [31:0] bundle1_imm      = i_bundle1[47:16];
+    wire [31:0] bundle1_imm32    = i_bundle1[47:16];
     wire [ 3:0] bundle1_pipeline = i_bundle1[51:48];
     wire [ 0:0] bundle1_shared   = i_bundle1[52:52];
     wire [ 7:0] bundle1_xarith   = i_bundle1[60:53];
     wire [ 6:0] bundle1_xlogic   = i_bundle1[67:61];
+
+    // immediates are at most 32 bits in the instruction (actually less),
+    // so sign extend them here to 64 bits
+    // this is done here instead of in the decoder to save interconnect
+    // resources between decode and issue but may be revisited
+    wire [63:0] bundle0_imm = {{32{bundle0_imm32[31]}}, bundle0_imm32};
+    wire [63:0] bundle1_imm = {{32{bundle1_imm32[31]}}, bundle1_imm32};
 
     // register addresses are used check for hazards
     wire [4:0] bundle0_rs1 = bundle0_raddr[ 4: 0];
@@ -157,7 +164,7 @@ module warp_issue (
     wire bundle1_pipe_xmulth = bundle1_pipeline == `PIPE_XMULTH;
     wire bundle1_pipe_xdiv   = bundle1_pipeline == `PIPE_XDIV;
 
-    wire [63:0] xarith_imm    = bundle0_pipe_xarith ? bundle0_imm : bundle1_imm;
+    wire [63:0] xarith_imm    = bundle0_pipe_xarith ? bundle0_imm       : bundle1_imm;
     wire [ 1:0] xarith_opsel  = bundle0_pipe_xarith ? bundle0_xarith[1:0] : bundle1_xarith[1:0];
     wire xarith_sub           = bundle0_pipe_xarith ? bundle0_xarith[2] : bundle1_xarith[2];
     wire xarith_unsigned      = bundle0_pipe_xarith ? bundle0_xarith[3] : bundle1_xarith[3];
@@ -166,15 +173,15 @@ module warp_issue (
     wire xarith_branch_invert = bundle0_pipe_xarith ? bundle0_xarith[6] : bundle1_xarith[6];
     wire xarith_word          = bundle0_pipe_xarith ? bundle0_xarith[7] : bundle1_xarith[7];
     wire xarith_op2_sel       = bundle0_pipe_xarith ? bundle0_shared[0] : bundle1_shared[0];
-    wire [ 4:0] xarith_rd     = bundle0_pipe_xarith ? bundle0_rd : bundle1_rd;
+    wire [ 4:0] xarith_rd     = bundle0_pipe_xarith ? bundle0_rd        : bundle1_rd;
 
-    wire [63:0] xlogic_imm   = bundle0_pipe_xlogic ? bundle0_imm : bundle1_imm;
+    wire [63:0] xlogic_imm   = bundle0_pipe_xlogic ? bundle0_imm         : bundle1_imm;
     wire [ 2:0] xlogic_opsel = bundle0_pipe_xlogic ? bundle0_xlogic[2:0] : bundle1_xlogic[2:0];
     wire xlogic_invert       = bundle0_pipe_xlogic ? bundle0_xlogic[3]   : bundle1_xlogic[3];
     wire xlogic_sll          = bundle0_pipe_xlogic ? bundle0_xlogic[5:4] : bundle1_xlogic[5:4];
     wire xlogic_word         = bundle0_pipe_xlogic ? bundle0_xlogic[6]   : bundle1_xlogic[6];
     wire xlogic_op2_sel      = bundle0_pipe_xlogic ? bundle0_shared[0]   : bundle1_shared[0];
-    wire [ 4:0] xlogic_rd    = bundle0_pipe_xlogic ? bundle0_rd : bundle1_rd;
+    wire [ 4:0] xlogic_rd    = bundle0_pipe_xlogic ? bundle0_rd          : bundle1_rd;
 
     wire bundle0_op2_sel = bundle0_shared[0];
     wire bundle1_op2_sel = bundle1_shared[0];
