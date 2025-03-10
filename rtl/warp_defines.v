@@ -14,10 +14,12 @@
 `define XLOGIC_OP_CTZ 3'b110
 `define XLOGIC_OP_POP 3'b111
 
-`define PIPE_XARITH 4'b0000
-`define PIPE_XLOGIC 4'b0001
-`define PIPE_XMUL   4'b0010
-`define PIPE_XDIV   4'b0011
+`define PIPE_XARITH 4'd0
+`define PIPE_XLOGIC 4'd1
+`define PIPE_XSHIFT 4'd2
+`define PIPE_XMULTL 4'd3
+`define PIPE_XMULTH 4'd4
+`define PIPE_XDIV   4'd5
 
 `define AHB_HTRANS_IDLE   2'b00
 `define AHB_HTRANS_BUSY   2'b01

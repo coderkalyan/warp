@@ -1,6 +1,6 @@
 `default_nettype none
 
-`include "warp_defines.v"
+// `include "warp_defines.v"
 
 // skid buffer implementation
 // adapted from https://fpgacpu.ca/fpga/Pipeline_Skid_Buffer.html
@@ -141,7 +141,7 @@ endmodule
 module warp_ahbm_formal #(
     parameter addr_width = 64,
     parameter data_width = 64,
-    parameter strb_width = $clog2(data_width),
+    parameter strb_width = $clog2(data_width)
 ) (
     input  wire                    i_ahb_hclk,
     input  wire                    i_ahb_hreset_n,

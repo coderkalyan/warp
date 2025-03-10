@@ -1,6 +1,6 @@
 `default_nettype none
 
-`include "warp_defines.v"
+// `include "warp_defines.v"
 
 module warp_fetch #(
     parameter RESET_ADDR = 64'h8000000000000000

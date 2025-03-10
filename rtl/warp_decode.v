@@ -1,6 +1,6 @@
 `default_nettype none
 
-`include "warp_defines.v"
+// `include "warp_defines.v"
 
 module warp_decode (
     input  wire        i_clk,
@@ -49,12 +49,12 @@ module warp_decode (
                 .o_xlogic(decode_xlogic[i])
             );
 
-            assign decode_bundle[ 0: 0] = decode_legal[i];
-            assign decode_bundle[15: 1] = decode_raddr[i];
-            assign decode_bundle[47:16] = decode_imm[i];
-            assign decode_bundle[51:48] = decode_pipeline[i];
-            assign decode_bundle[59:52] = decode_xarith[i];
-            assign decode_bundle[66:60] = decode_xlogic[i];
+            assign decode_bundle[i][ 0: 0] = decode_legal[i];
+            assign decode_bundle[i][15: 1] = decode_raddr[i];
+            assign decode_bundle[i][47:16] = decode_imm[i];
+            assign decode_bundle[i][51:48] = decode_pipeline[i];
+            assign decode_bundle[i][59:52] = decode_xarith[i];
+            assign decode_bundle[i][66:60] = decode_xlogic[i];
         end
     endgenerate
 

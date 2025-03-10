@@ -1,6 +1,6 @@
 `default_nettype none
 
-`include "warp_defines.v"
+// `include "warp_defines.v"
 
 `define XSHIFT_OP_SHL 2'b00
 `define XSHIFT_OP_SHR 2'b01
