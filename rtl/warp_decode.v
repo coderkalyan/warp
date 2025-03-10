@@ -28,8 +28,8 @@ module warp_decode (
     wire [14:0] decode_raddr    [1:0];
     wire [31:0] decode_imm      [1:0]; // TODO: consider reducing imm size by doing signext later
     wire [3:0]  decode_pipeline [1:0];
-    wire [6:0]  decode_xarith   [1:0];
-    wire [5:0]  decode_xlogic   [1:0];
+    wire [7:0]  decode_xarith   [1:0];
+    wire [6:0]  decode_xlogic   [1:0];
     wire [`BUNDLE_SIZE - 1:0] decode_bundle [1:0];
 
     // can't assign both of these inline due to verilog syntax limitations
@@ -41,7 +41,7 @@ module warp_decode (
         for (i = 0; i < 2; i = i + 1) begin
             warp_udecode udecode (
                 .i_inst(decode_inst[i]),
-               .o_legal(decode_legal[i]),
+                .o_legal(decode_legal[i]),
                 .o_raddr(decode_raddr[i]),
                 .o_imm(decode_imm[i]),
                 .o_pipeline(decode_pipeline[i]),
@@ -273,18 +273,19 @@ module warp_udecode (
     reg [1:0] xlogic_sll;
     always @(*) begin
         legal = 1'b0;
-        pipeline = 4'bxxxx;
-        xarith_opsel = 2'bxx;
-        xarith_sub = 1'bx;
-        xarith_unsigned = 1'bx;
-        xarith_cmp_mode = 1'bx;
-        xarith_branch_equal = 1'bx;
-        xarith_branch_invert = 1'bx;
-        xarith_word = 1'bx;
-        xlogic_opsel = 3'bxxx;
-        xlogic_invert = 1'bx;
-        xlogic_sll = 2'bxx;
-        xlogic_word = 1'bx;
+        // FIXME: these can be x once we debug everything
+        pipeline = 4'b0000;
+        xarith_opsel = 2'b00;
+        xarith_sub = 1'b0;
+        xarith_unsigned = 1'b0;
+        xarith_cmp_mode = 1'b0;
+        xarith_branch_equal = 1'b0;
+        xarith_branch_invert = 1'b0;
+        xarith_word = 1'b0;
+        xlogic_opsel = 3'b000;
+        xlogic_invert = 1'b0;
+        xlogic_sll = 2'b00;
+        xlogic_word = 1'b0;
 
         case (1'b1)
             // addi, slti, sltiu, xori, ori, andi, slli, srli, srai
@@ -483,6 +484,7 @@ module warp_udecode (
     assign o_raddr = {rd, rs2, rs1};
     assign o_imm = imm;
     assign o_pipeline = pipeline;
+
     assign o_xarith[1:0] = xarith_opsel;
     assign o_xarith[2]   = xarith_sub;
     assign o_xarith[3]   = xarith_unsigned;
@@ -490,6 +492,7 @@ module warp_udecode (
     assign o_xarith[5]   = xarith_branch_equal;
     assign o_xarith[6]   = xarith_branch_invert;
     assign o_xarith[7]   = xarith_word;
+
     assign o_xlogic[2:0] = xlogic_opsel;
     assign o_xlogic[3]   = xlogic_invert;
     assign o_xlogic[5:4] = xlogic_sll;

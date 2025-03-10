@@ -3,3 +3,6 @@ warp/
 warp_bmc/
 warp_cover/
 env
+__pycache__/
+sim_build
+*.vcd

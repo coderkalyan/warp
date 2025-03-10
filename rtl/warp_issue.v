@@ -1,6 +1,6 @@
 `default_nettype none
 
-`include "warp_defines.v"
+// `include "warp_defines.v"
 
 module warp_issue (
     input  wire        i_clk,
@@ -47,6 +47,7 @@ module warp_issue (
     // interface to integer shift/rotate pipeline
     // xshift_operand is always rs1
     // xshift_amount is either rs2 or immediate
+    output wire        o_xshift_banksel, // (rs1, rs2) or (rs3, rs4)
     output wire [ 1:0] o_xshift_opsel,
     output wire        o_xshift_arithmetic,
     output wire        o_xshift_word,
@@ -54,11 +55,13 @@ module warp_issue (
     input  wire        i_xshift_ready,
     // interface to integer lower 32 multiply
     // op1 is always rs1, op2 is always rs2
+    output wire        o_xmultl_banksel, // (rs1, rs2) or (rs3, rs4)
     output wire        o_xmultl_word,
     output wire        o_xmultl_valid,
     input  wire        i_xmultl_ready,
     // interface to integer upper 32 multiply
     // op1 is always rs1, op2 is always rs2
+    output wire        o_xmulth_banksel, // (rs1, rs2) or (rs3, rs4)
     output wire        o_xmulth_unsigned,
     output wire        o_xmulth_valid,
     input  wire        i_xmulth_ready,
@@ -67,7 +70,7 @@ module warp_issue (
     output wire        o_xdiv_unsigned,
     output wire        o_xdiv_word,
     output wire        o_xdiv_valid,
-    input  wire        i_xdiv_ready
+    input  wire        i_xdiv_ready,
     // execution units clear the reservation for each of their source and
     // destination registers upon retiring the instruction
     input  wire [31:0] i_inst0_retire,
@@ -154,6 +157,7 @@ module warp_issue (
     wire xarith_cmp_mode      = bundle0_pipe_xarith ? bundle0_xarith[4] : bundle1_xarith[4];
     wire xarith_branch_equal  = bundle0_pipe_xarith ? bundle0_xarith[5] : bundle1_xarith[5];
     wire xarith_branch_invert = bundle0_pipe_xarith ? bundle0_xarith[6] : bundle1_xarith[6];
+    wire xarith_word          = bundle0_pipe_xarith ? bundle0_xarith[7] : bundle1_xarith[7];
 
     wire xlogic_opsel  = bundle0_pipe_xlogic ? bundle0_xlogic[2:0] : bundle1_xlogic[2:0];
     wire xlogic_invert = bundle0_pipe_xlogic ? bundle0_xlogic[3]   : bundle1_xlogic[3];
@@ -179,14 +183,20 @@ module warp_issue (
     // improve many cases)
     // FIXME: do we want a check against 0 here? check what RF does
     wire bundle1_waw = bundle0_rd == bundle1_rd;
-    wire bundle0_ready = i_input_valid && ((reservation & bundle0_mask) != 32'h0);
-    wire bundle1_ready = i_input_valid && ((reservation & bundle1_mask) != 32'h0) && bundle0_ready && !bundle1_waw;
+    wire bundle0_ready = i_input_valid && ((reservation & bundle0_mask) == 32'h0);
+    wire bundle1_ready = i_input_valid && ((reservation & bundle1_mask) == 32'h0) && bundle0_ready && !bundle1_waw;
 
     wire bundle0_dispatch_xarith = bundle0_pipe_xarith && bundle0_ready;
     wire bundle0_dispatch_xlogic = bundle0_pipe_xlogic && bundle0_ready;
+    wire bundle0_dispatch_xmultl = bundle0_pipe_xmultl && bundle0_ready;
+    wire bundle0_dispatch_xmulth = bundle0_pipe_xmulth && bundle0_ready;
+    wire bundle0_dispatch_xdiv   = bundle0_pipe_xdiv   && bundle0_ready;
 
-    wire bundle1_dispatch_xarith = !bundle0_pipe_xarith && bundle1_pipe_xarith && bundle0_ready;
-    wire bundle1_dispatch_xlogic = !bundle0_pipe_xarith && bundle0_pipe_xlogic && bundle1_ready;
+    wire bundle1_dispatch_xarith = !bundle0_pipe_xarith && bundle1_pipe_xarith && bundle1_ready;
+    wire bundle1_dispatch_xlogic = !bundle0_pipe_xarith && bundle1_pipe_xlogic && bundle1_ready;
+    wire bundle1_dispatch_xmultl = !bundle0_pipe_xmultl && bundle1_pipe_xmultl && bundle1_ready;
+    wire bundle1_dispatch_xmulth = !bundle0_pipe_xmulth && bundle1_pipe_xmulth && bundle1_ready;
+    wire bundle1_dispatch_xdiv   = !bundle0_pipe_xdiv   && bundle1_pipe_xdiv   && bundle1_ready;
 
     wire xarith_valid = bundle0_dispatch_xarith || bundle1_dispatch_xarith;
     wire xlogic_valid = bundle0_dispatch_xlogic || bundle1_dispatch_xlogic;
@@ -209,11 +219,11 @@ module warp_issue (
         end
 
         case (1'b1)
-            bundle1_pipe_xarith: bundle1_transmit = bundle0_dispatch_xarith && i_xarith_ready;
-            bundle1_pipe_xlogic: bundle1_transmit = bundle0_dispatch_xlogic && i_xlogic_ready;
-            bundle1_pipe_xmultl: bundle1_transmit = bundle0_dispatch_xmultl && i_xmultl_ready;
-            bundle1_pipe_xmulth: bundle1_transmit = bundle0_dispatch_xmulth && i_xmulth_ready;
-            bundle1_pipe_xdiv  : bundle1_transmit = bundle0_dispatch_xdiv   && i_xdiv_ready;
+            bundle1_pipe_xarith: bundle1_transmit = bundle1_dispatch_xarith && i_xarith_ready;
+            bundle1_pipe_xlogic: bundle1_transmit = bundle1_dispatch_xlogic && i_xlogic_ready;
+            bundle1_pipe_xmultl: bundle1_transmit = bundle1_dispatch_xmultl && i_xmultl_ready;
+            bundle1_pipe_xmulth: bundle1_transmit = bundle1_dispatch_xmulth && i_xmulth_ready;
+            bundle1_pipe_xdiv  : bundle1_transmit = bundle1_dispatch_xdiv   && i_xdiv_ready;
         endcase
     end
 
@@ -230,11 +240,23 @@ module warp_issue (
             bundle0_done <= 1'b1;
     end
 
+    reg input_ready;
+    always @(posedge i_clk, negedge i_rst_n) begin
+        if (!i_rst_n)
+            input_ready <= 1'b1;
+        else if (bundle1_transmit)
+            input_ready <= 1'b1;
+        else if (i_input_valid)
+            input_ready <= 1'b0;
+    end
+
     wire [31:0] bundle0_reserve = bundle0_mask & {32{bundle0_transmit}};
     wire [31:0] bundle1_reserve = bundle1_mask & {32{bundle1_transmit}};
-    assign next_reservation = (reservation & ~i_inst0_retire & ~i_inst1_retire) | bundle0_reserve | bundle1_reserve;
+    wire [31:0] retire  = i_inst0_retire & i_inst1_retire;
+    wire [31:0] reserve = (bundle0_reserve | bundle1_reserve) & 32'hfffffffe;
+    assign next_reservation = (reservation & ~retire) | reserve;
 
-    assign o_input_ready = bundle1_transmit;
+    assign o_input_ready = input_ready;
 
     assign o_xarith_banksel       = bundle1_pipe_xarith;
     assign o_xarith_opsel         = xarith_opsel;
@@ -243,6 +265,7 @@ module warp_issue (
     assign o_xarith_cmp_mode      = xarith_cmp_mode;
     assign o_xarith_branch_equal  = xarith_branch_equal;
     assign o_xarith_branch_invert = xarith_branch_invert;
+    assign o_xarith_word          = xarith_word;
     assign o_xarith_valid         = xarith_valid;
 
     assign o_xlogic_banksel = bundle1_pipe_xlogic;

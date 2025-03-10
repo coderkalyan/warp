@@ -9,6 +9,8 @@
 
 // scalar integer arithmetic unit - add/sub, set less than, min/max, branch
 module warp_xarith (
+    input  wire        i_clk,
+    input  wire        i_rst_n,
     input  wire [63:0] i_op1,
     input  wire [63:0] i_op2,
     // `XARITH_OP_ADD: o_result = i_op1 +/- i_op2
@@ -122,7 +124,7 @@ module warp_xlogic (
             `XLOGIC_OP_AND: result = and_result;
             `XLOGIC_OP_OR:  result = or_result;
             `XLOGIC_OP_XOR: result = xor_result;
-            `XLOGIC_OP_SHF: result = shift_result;
+            // `XLOGIC_OP_SHF: result = shift_result;
             `XLOGIC_OP_SLA: result = sla_result;
             default: result = 64'hx;
         endcase

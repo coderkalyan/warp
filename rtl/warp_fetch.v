@@ -110,17 +110,21 @@ module warp_fetch #(
             next_pc = pc;
     end
 
-    reg imem_init;
+    // FIXME: is this 2 bit edge trigger the best we can do for fetch unit
+    // startup on an asynchronous reset?
+    reg [1:0] init_edge;
     always @(posedge i_clk, negedge i_rst_n) begin
         if (!i_rst_n)
-            imem_init <= 1'b1;
+            init_edge <= 2'b00;
         else
-            imem_init <= 1'b0;
+            init_edge <= {init_edge[0], 1'b1};
     end
+
+    wire init = !init_edge[1] && init_edge[0];
 
     // read from imem once on init (first clock), and then every time
     // there is valid data output so we can read next
-    wire imem_ren = i_rst_n && (imem_init || output_valid);
+    wire imem_ren = init || output_valid;
 
     // request the next pc address from the cache, which
     // automatically handles stalling by re-fetching the
