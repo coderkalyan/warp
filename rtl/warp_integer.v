@@ -8,10 +8,13 @@
 `define XSHIFT_OP_ROR 2'b11
 
 // scalar integer arithmetic unit - add/sub, set less than, min/max, branch
+// latency: 1 cycle
+// initiation interval: 1 cycle
 module warp_xarith (
     input  wire        i_clk,
     input  wire        i_rst_n,
-    // FIXME: document this
+    // when asserted, the unit with start an arithmetic operation with the
+    // given operands and selected operation
     input  wire        i_valid,
     input  wire [63:0] i_op1,
     input  wire [63:0] i_op2,
@@ -43,9 +46,14 @@ module warp_xarith (
     // sign extend the result to 64 bits
     // only used for OP_ADD
     input  wire        i_word,
+    // when asserted, o_result contains the result of the arithmetic
+    // operation issued on the previous cycle
     output wire        o_valid,
     output wire [63:0] o_result,
     output wire        o_branch,
+    // the destination register is passed through from i_rd and output in sync
+    // with o_valid and o_result. it is not modified internally but is used to
+    // determine which register to write to in write back
     output wire [ 4:0] o_rd
 );
     // add/sub
@@ -109,7 +117,8 @@ endmodule
 module warp_xlogic (
     input  wire        i_clk,
     input  wire        i_rst_n,
-    // FIXME: document this
+    // when asserted, the unit with start a logical operation with the
+    // given operands and selected operation
     input  wire        i_valid,
     input  wire [63:0] i_op1,
     input  wire [63:0] i_op2,
@@ -124,7 +133,7 @@ module warp_xlogic (
     // `XLOGIC_OP_CLZ: o_result = leadingzeros(i_op1)
     // `XLOGIC_OP_CTZ: o_result = trailingzeros(i_op1)
     // `XLOGIC_OP_POP: o_result = popcount(i_op1)
-    input  wire [2:0]  i_opsel,
+    input  wire [ 2:0] i_opsel,
     // when asserted, invert (logical not) i_op2
     // implements andnot, ornot, and xnor
     // only used for OP_AND, OR_OR, OP_XOR
@@ -132,13 +141,18 @@ module warp_xlogic (
     // number of bits to shift i_op1 left by before adding i_op2
     // used for address generation (2/4/8 * base + offset)
     // only used for OP_SLA
-    input  wire [1:0]  i_sll,
+    input  wire [ 1:0] i_sll,
     // when asserted, operate on lower 32 bits only of i_op1 and i_op2 and
     // sign extend the result to 64 bits
     // only used for OP_SHF
     input  wire        i_word,
+    // when asserted, o_result contains the result of the logical
+    // operation issued on the previous cycle
     output wire        o_valid,
     output wire [63:0] o_result,
+    // the destination register is passed through from i_rd and output in sync
+    // with o_valid and o_result. it is not modified internally but is used to
+    // determine which register to write to in write back
     output wire [ 4:0] o_rd
 );
     // and/or with conditional invert of op2
