@@ -176,37 +176,37 @@ module warp_xshift (
     assign operand_in = i_word ? {{32{i_operand[31]}}, i_operand[31:0]} : i_operand;
 
     // Barrel shifter stages
-    // Stage 0: shift by 1
+    // Stage 0: shift or rotate by 1
     assign stage0_shl = (i_amount[0]) ? ({operand_in[62:0], 1'b0}) : operand_in;
     assign stage0_shr = (i_amount[0]) ? ({(i_arithmetic & operand_in[63]), operand_in[63:1]}) : operand_in;
     assign stage0_rol = (i_amount[0]) ? ({operand_in[62:0], operand_in[63]}) : operand_in;
     assign stage0_ror = (i_amount[0]) ? ({operand_in[0], operand_in[63:1]}) : operand_in;
 
-    // Stage 1: shift by 2
+    // Stage 1: shift or rotate by 2
     assign stage1_shl = (i_amount[1]) ? ({stage0_shl[61:0], 2'b0}) : stage0_shl;
     assign stage1_shr = (i_amount[1]) ? ({{2{i_arithmetic & stage0_shr[63]}}, stage0_shr[63:2]}) : stage0_shr;
     assign stage1_rol = (i_amount[1]) ? ({stage0_rol[61:0], stage0_rol[63:62]}) : stage0_rol;
     assign stage1_ror = (i_amount[1]) ? ({stage0_ror[1:0], stage0_ror[63:2]}) : stage0_ror;
 
-    // Stage 2: shift by 4
+    // Stage 2: shift or rotate by 4
     assign stage2_shl = (i_amount[2]) ? ({stage1_shl[59:0], 4'b0}) : stage1_shl;
     assign stage2_shr = (i_amount[2]) ? ({{4{i_arithmetic & stage1_shr[63]}}, stage1_shr[63:4]}) : stage1_shr;
     assign stage2_rol = (i_amount[2]) ? ({stage1_rol[59:0], stage1_rol[63:60]}) : stage1_rol;
     assign stage2_ror = (i_amount[2]) ? ({stage1_ror[3:0], stage1_ror[63:4]}) : stage1_ror;
 
-    // Stage 3: shift by 8
+    // Stage 3: shift or rotate by 8
     assign stage3_shl = (i_amount[3]) ? ({stage2_shl[55:0], 8'b0}) : stage2_shl;
     assign stage3_shr = (i_amount[3]) ? ({{8{i_arithmetic & stage2_shr[63]}}, stage2_shr[63:8]}) : stage2_shr;
     assign stage3_rol = (i_amount[3]) ? ({stage2_rol[55:0], stage2_rol[63:56]}) : stage2_rol;
     assign stage3_ror = (i_amount[3]) ? ({stage2_ror[7:0], stage2_ror[63:8]}) : stage2_ror;
 
-    // Stage 4: shift by 16
+    // Stage 4: shift or rotate by 16
     assign stage4_shl = (i_amount[4]) ? ({stage3_shl[47:0], 16'b0}) : stage3_shl;
     assign stage4_shr = (i_amount[4]) ? ({{16{i_arithmetic & stage3_shr[63]}}, stage3_shr[63:16]}) : stage3_shr;
     assign stage4_rol = (i_amount[4]) ? ({stage3_rol[47:0], stage3_rol[63:48]}) : stage3_rol;
     assign stage4_ror = (i_amount[4]) ? ({stage3_ror[15:0], stage3_ror[63:16]}) : stage3_ror;
 
-    // Stage 5: shift by 32
+    // Stage 5: shift or rotate by 32
     assign stage5_shl = (i_amount[5] & ~i_word) ? ({stage4_shl[31:0], 32'b0}) : stage4_shl;
     assign stage5_shr = (i_amount[5] & ~i_word) ? ({{32{i_arithmetic & stage4_shr[63]}}, stage4_shr[63:32]}) : stage4_shr;
     assign stage5_rol = (i_amount[5]) ? ({stage4_rol[31:0], stage4_rol[63:32]}) : stage4_rol;
@@ -221,31 +221,31 @@ module warp_xshift (
 
     // Stage 0: rotate by 1 (32 bit)
     assign stage0_32_rotate = (i_amount[0]) ? (
-    (i_opsel == `XSHIFT_OP_ROL) ? {operand_in[30:0], operand_in[31]} : // Rotate Left by 1
+        (i_opsel == `XSHIFT_OP_ROL) ? {operand_in[30:0], operand_in[31]} : // Rotate Left by 1
         {operand_in[0], operand_in[31:1]}  // Rotate Right by 1
         ) : operand_in;
 
     // Stage 1: rotate by 2 (32 bit)
     assign stage1_32_rotate = (i_amount[1]) ? (
-    (i_opsel == `XSHIFT_OP_ROL) ? {stage0_32_rotate[29:0], stage0_32_rotate[31:30]} : // Rotate Left by 2
+        (i_opsel == `XSHIFT_OP_ROL) ? {stage0_32_rotate[29:0], stage0_32_rotate[31:30]} : // Rotate Left by 2
         {stage0_32_rotate[1:0], stage0_32_rotate[31:2]}  // Rotate Right by 2
         ) : stage0_32_rotate;
 
     // Stage 2: rotate by 4 (32 bit)
     assign stage2_32_rotate = (i_amount[2]) ? (
-    (i_opsel == `XSHIFT_OP_ROL) ? {stage1_32_rotate[27:0], stage1_32_rotate[31:28]} : // Rotate Left by 4
+        (i_opsel == `XSHIFT_OP_ROL) ? {stage1_32_rotate[27:0], stage1_32_rotate[31:28]} : // Rotate Left by 4
         {stage1_32_rotate[3:0], stage1_32_rotate[31:4]}  // Rotate Right by 4
         ) : stage1_32_rotate;
 
     // Stage 3: rotate by 8 (32 bit)
     assign stage3_32_rotate = (i_amount[3]) ? (
-    (i_opsel == `XSHIFT_OP_ROL) ? {stage2_32_rotate[23:0], stage2_32_rotate[31:24]} : // Rotate Left by 8
+        (i_opsel == `XSHIFT_OP_ROL) ? {stage2_32_rotate[23:0], stage2_32_rotate[31:24]} : // Rotate Left by 8
         {stage2_32_rotate[7:0], stage2_32_rotate[31:8]}  // Rotate Right by 8
         ) : stage2_32_rotate;
 
     // Stage 4: rotate by 16 (32 bit)
     assign stage4_32_rotate = (i_amount[4]) ? (
-    (i_opsel == `XSHIFT_OP_ROL) ? {stage3_32_rotate[15:0], stage3_32_rotate[31:16]} : // Rotate Left by 16
+        (i_opsel == `XSHIFT_OP_ROL) ? {stage3_32_rotate[15:0], stage3_32_rotate[31:16]} : // Rotate Left by 16
         {stage3_32_rotate[15:0], stage3_32_rotate[31:16]}  // Rotate Right by 16
         ) : stage3_32_rotate;
 
