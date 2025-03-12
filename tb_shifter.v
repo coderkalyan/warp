@@ -61,28 +61,39 @@ module tb_shifter ();
 
     initial begin
         // formal verification
+
+        //for 64 bits:
+        //test rotate left
         assert (o_result == (i_operand << i_amount) && (i_opsel == XSHIFT_OP_SHL) && i_word_false);
 
+        //test rotate right zero extended
         assert (o_result == (i_operand >> i_amount) &&
         (i_opsel == XSHIFT_OP_SHR) &&
-        i_arithmetic == 1'b0 &&
+        (i_arithmetic == 1'b0) &&
         i_word_false);
 
+        //test rotate right signed extended
         assert (o_result == (i_operand >>> i_amount) &&
         (i_opsel == XSHIFT_OP_SHR) &&
-        i_arithmetic == 1'b1);
+        (i_arithmetic == 1'b1) &&
+        i_word_false);
 
+        //test rotate right
         assert (o_result == (i_operand >> i_amount | i_operand << (64-i_amount)) &&
-        (i_opsel == XSHIFT_OP_SHR));
-        // assert (o_result == (i_operand << i_amount | i_operand >> (64-i_amount)));
+        (i_opsel == XSHIFT_OP_ROR) &&
+        i_word_false);
 
+        //test rotate left
+        assert (o_result == (i_operand << i_amount | i_operand >> (64-i_amount)) &&
+        (i_opsel == XSHIFT_OP_ROL) &&
+        i_word_false);
+    end
 
-
-
-
-        // assert(o_result == (i_operand rol i_amount));
-        // assert(o_result == (i_operand ror i_amount));
+    initial begin
+        // formatl verification
+        // for 32 bits
 
     end
+    
 
 endmodule
