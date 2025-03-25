@@ -223,6 +223,7 @@ module warp_hart #(
         .of_rs1_rdata_xarith(f_issue_rs1_rdata_xarith),
         .of_rs2_rdata_xarith(f_issue_rs2_rdata_xarith),
         .of_rd_wdata_xarith(f_issue_rd_wdata_xarith),
+
         .of_valid_xlogic(f_issue_valid_xlogic),
         .of_order_xlogic(f_issue_order_xlogic),
         .of_insn_xlogic(f_issue_insn_xlogic),

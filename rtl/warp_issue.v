@@ -392,6 +392,60 @@ module warp_issue (
         end
     end
 
+`ifdef RISCV_FORMAL
+    reg         rf_xarith_valid, rf_xlogic_valid;
+    reg [63:0]  rf_order_xarith, rf_order_xlogic;
+    reg [31:0]  rf_insn_xarith, rf_insn_xlogic;
+    reg         rf_trap_xarith, rf_halt_xarith, rf_intr_xarith;
+    reg  [ 1:0] rf_mode_xarith, rf_ixl_xarith;
+    reg [63:0]  rf_pc_rdata_xarith, rf_pc_wdata_xarith;
+    reg  [ 4:0] rf_rs1_addr_xarith, rf_rs2_addr_xarith, rf_rd_addr_xarith;
+    reg [63:0]  rf_rs1_rdata_xarith, rf_rs2_rdata_xarith, rf_rd_wdata_xarith;
+    reg         rf_trap_xlogic, rf_halt_xlogic, rf_intr_xlogic;
+    reg  [ 1:0] rf_mode_xlogic, rf_ixl_xlogic;
+    reg [63:0]  rf_pc_rdata_xlogic, rf_pc_wdata_xlogic;
+    reg  [ 4:0] rf_rs1_addr_xlogic, rf_rs2_addr_xlogic, rf_rd_addr_xlogic;
+    reg [63:0]  rf_rs1_rdata_xlogic, rf_rs2_rdata_xlogic, rf_rd_wdata_xlogic;
+
+    always @(posedge i_clk, negedge i_rst_n) begin
+        if (!i_rst_n) begin
+            rf_xarith_valid       <= 1'b0;
+            rf_order_xarith       <= 64'h0;
+            rf_insn_xarith        <= 32'h0;
+            rf_trap_xarith        <= 1'b0;
+            rf_halt_xarith        <= 1'b0;
+            rf_intr_xarith        <= 1'b0;
+            rf_mode_xarith        <= 2'b0;
+            rf_ixl_xarith         <= 2'b0;
+            rf_pc_rdata_xarith    <= 64'h0;
+            rf_pc_wdata_xarith    <= 64'h0;
+            rf_rs1_addr_xarith    <= 5'h0;
+            rf_rs2_addr_xarith    <= 5'h0;
+            rf_rs1_rdata_xarith   <= 64'h0;
+            rf_rs2_rdata_xarith   <= 64'h0;
+            rf_rd_addr_xarith     <= 5'h0;
+            rf_rd_wdata_xarith    <= 64'h0;
+        end else begin
+            rf_xarith_valid       <= f_valid_xarith;
+            rf_order_xarith       <= f_order_xarith;
+            rf_insn_xarith        <= f_insn_xarith;
+            rf_trap_xarith        <= f_trap_xarith;
+            rf_halt_xarith        <= f_halt_xarith;
+            rf_intr_xarith        <= f_intr_xarith;
+            rf_mode_xarith        <= f_mode_xarith;
+            rf_ixl_xarith         <= f_ixl_xarith;
+            rf_pc_rdata_xarith    <= f_pc_rdata_xarith;
+            rf_pc_wdata_xarith    <= f_pc_wdata_xarith;
+            rf_rs1_addr_xarith    <= f_rs1_addr_xarith;
+            rf_rs2_addr_xarith    <= f_rs2_addr_xarith;
+            rf_rs1_rdata_xarith   <= f_rs1_rdata_xarith;
+            rf_rs2_rdata_xarith   <= f_rs2_rdata_xarith;
+            rf_rd_addr_xarith     <= f_rd_addr_xarith;
+            rf_rd_wdata_xarith    <= f_rd_wdata_xarith;
+        end
+    end
+`endif
+
     reg        r_xlogic_banksel, r_xlogic_op2_sel;
     reg [63:0] r_xlogic_imm;
     reg [ 2:0] r_xlogic_opsel;
@@ -423,24 +477,41 @@ module warp_issue (
     end
 
 `ifdef RISCV_FORMAL
-    reg        rf_xarith_valid, rf_xlogic_valid;
-    reg [31:0] rf_xarith_inst, rf_xlogic_inst;
-    reg [63:0] rf_xarith_order, rf_xlogic_order;
     always @(posedge i_clk, negedge i_rst_n) begin
         if (!i_rst_n) begin
-            rf_xarith_valid <= 1'b0;
-            rf_xarith_inst  <= 32'h0;
-            rf_xarith_order <= 64'h0;
-            rf_xlogic_valid <= 1'b0;
-            rf_xlogic_inst  <= 32'h0;
-            rf_xlogic_order <= 64'h0;
+            rf_xlogic_valid       <= 1'b0;
+            rf_order_xlogic       <= 64'h0;
+            rf_insn_xlogic        <= 32'h0;
+            rf_trap_xlogic        <= 1'b0;
+            rf_halt_xlogic        <= 1'b0;
+            rf_intr_xlogic        <= 1'b0;
+            rf_mode_xlogic        <= 2'b0;
+            rf_ixl_xlogic         <= 2'b0;
+            rf_pc_rdata_xlogic    <= 64'h0;
+            rf_pc_wdata_xlogic    <= 64'h0;
+            rf_rs1_addr_xlogic    <= 5'h0;
+            rf_rs2_addr_xlogic    <= 5'h0;
+            rf_rs1_rdata_xlogic   <= 64'h0;
+            rf_rs2_rdata_xlogic   <= 64'h0;
+            rf_rd_addr_xlogic     <= 5'h0;
+            rf_rd_wdata_xlogic    <= 64'h0;
         end else begin
-            // rf_xarith_valid <= f_xarith_valid;
-            // rf_xarith_inst  <= f_xarith_inst;
-            // rf_xarith_order <= f_xarith_order;
-            // rf_xlogic_valid <= f_xlogic_valid;
-            // rf_xlogic_inst  <= f_xlogic_inst;
-            // rf_xlogic_order <= f_xlogic_order;
+            rf_xlogic_valid       <= f_valid_xlogic;
+            rf_order_xlogic       <= f_order_xlogic;
+            rf_insn_xlogic        <= f_insn_xlogic;
+            rf_trap_xlogic        <= f_trap_xlogic;
+            rf_halt_xlogic        <= f_halt_xlogic;
+            rf_intr_xlogic        <= f_intr_xlogic;
+            rf_mode_xlogic        <= f_mode_xlogic;
+            rf_ixl_xlogic         <= f_ixl_xlogic;
+            rf_pc_rdata_xlogic    <= f_pc_rdata_xlogic;
+            rf_pc_wdata_xlogic    <= f_pc_wdata_xlogic;
+            rf_rs1_addr_xlogic    <= f_rs1_addr_xlogic;
+            rf_rs2_addr_xlogic    <= f_rs2_addr_xlogic;
+            rf_rs1_rdata_xlogic   <= f_rs1_rdata_xlogic;
+            rf_rs2_rdata_xlogic   <= f_rs2_rdata_xlogic;
+            rf_rd_addr_xlogic     <= f_rd_addr_xlogic;
+            rf_rd_wdata_xlogic    <= f_rd_wdata_xlogic;
         end
     end
 `endif
@@ -474,14 +545,41 @@ module warp_issue (
     assign o_xlogic_rd      = r_xlogic_rd;
     assign o_xlogic_valid   = r_xlogic_valid;
 
-// `ifdef RISCV_FORMAL
-//     assign of_xarith_valid = rf_xarith_valid;
-//     assign of_xarith_inst  = rf_xarith_inst;
-//     assign of_xarith_order = rf_xarith_order;
-//     assign of_xlogic_valid = rf_xlogic_valid;
-//     assign of_xlogic_inst  = rf_xlogic_inst;
-//     assign of_xlogic_order = rf_xlogic_order;
-// `endif
+`ifdef RISCV_FORMAL
+    assign of_valid_xarith       = rf_xarith_valid;
+    assign of_order_xarith       = rf_order_xarith;
+    assign of_insn_xarith        = rf_insn_xarith;
+    assign of_trap_xarith        = rf_trap_xarith;
+    assign of_halt_xarith        = rf_halt_xarith;
+    assign of_intr_xarith        = rf_intr_xarith;
+    assign of_mode_xarith        = rf_mode_xarith;
+    assign of_ixl_xarith         = rf_ixl_xarith;
+    assign of_pc_rdata_xarith    = rf_pc_rdata_xarith;
+    assign of_pc_wdata_xarith    = rf_pc_wdata_xarith;
+    assign of_rs1_addr_xarith    = rf_rs1_addr_xarith;
+    assign of_rs2_addr_xarith    = rf_rs2_addr_xarith;
+    assign of_rs1_rdata_xarith   = rf_rs1_rdata_xarith;
+    assign of_rs2_rdata_xarith   = rf_rs2_rdata_xarith;
+    assign of_rd_addr_xarith     = rf_rd_addr_xarith;
+    assign of_rd_wdata_xarith    = rf_rd_wdata_xarith;
+
+    assign of_valid_xlogic       = rf_xlogic_valid;
+    assign of_order_xlogic       = rf_order_xlogic;
+    assign of_insn_xlogic        = rf_insn_xlogic;
+    assign of_trap_xlogic        = rf_trap_xlogic;
+    assign of_halt_xlogic        = rf_halt_xlogic;
+    assign of_intr_xlogic        = rf_intr_xlogic;
+    assign of_mode_xlogic        = rf_mode_xlogic;
+    assign of_ixl_xlogic         = rf_ixl_xlogic;
+    assign of_pc_rdata_xlogic    = rf_pc_rdata_xlogic;
+    assign of_pc_wdata_xlogic    = rf_pc_wdata_xlogic;
+    assign of_rs1_addr_xlogic    = rf_rs1_addr_xlogic;
+    assign of_rs2_addr_xlogic    = rf_rs2_addr_xlogic;
+    assign of_rs1_rdata_xlogic   = rf_rs1_rdata_xlogic;
+    assign of_rs2_rdata_xlogic   = rf_rs2_rdata_xlogic;
+    assign of_rd_addr_xlogic     = rf_rd_addr_xlogic;
+    assign of_rd_wdata_xlogic    = rf_rd_wdata_xlogic;
+`endif
 endmodule
 
 `default_nettype wire
