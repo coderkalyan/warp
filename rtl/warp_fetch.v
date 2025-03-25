@@ -1,6 +1,6 @@
 `default_nettype none
 
-// `include "warp_defines.v"
+`include "warp_defines.v"
 
 module warp_fetch #(
     parameter RESET_ADDR = 64'h8000000000000000
@@ -41,9 +41,15 @@ module warp_fetch #(
     // indicates that the decode unit is ready to accept the
     // instructions output here.
     input  wire        i_output_ready,
+`ifdef RISCV_FORMAL
+    `RVFI_METADATA_OUTPUTS(ch0),
+    `RVFI_PC_OUTPUTS(ch0),
+    `RVFI_METADATA_OUTPUTS(ch1),
+    `RVFI_PC_OUTPUTS(ch1),
+`endif
     output wire [31:0] o_inst0,
     output wire [31:0] o_inst1,
-    output wire [1:0]  o_compressed
+    output wire [ 1:0] o_compressed
 );
     reg [39:0] pc, next_pc;
     always @(posedge i_clk, negedge i_rst_n) begin
@@ -77,6 +83,7 @@ module warp_fetch #(
     // advance the pc depending on predecode results
     // this is only used if the fetch data is valid and decode
     // unit is ready
+    // FIXME: pc reduced to 39 bit, so no need for 64 bit advance
     reg [63:0] advance_pc;
     always @(*) begin
         advance_pc = 64'hx;
@@ -110,7 +117,7 @@ module warp_fetch #(
             next_pc = pc;
     end
 
-    // FIXME: is this 2 bit edge trigger the best we can do for fetch unit
+    // TODO: is this 2 bit edge trigger the best we can do for fetch unit
     // startup on an asynchronous reset?
     reg [1:0] init_edge;
     always @(posedge i_clk, negedge i_rst_n) begin
@@ -141,6 +148,38 @@ module warp_fetch #(
     assign o_inst0 = inst0;
     assign o_inst1 = count ? inst1 : `CANONICAL_NOP;
     assign o_compressed = {count ? compressed[1] : 1'b0, compressed[0]};
+
+`ifdef RISCV_FORMAL
+    reg [63:0] f_order;
+    always @(posedge i_clk, negedge i_rst_n) begin
+        if (!i_rst_n)
+            f_order <= 64'h0;
+        else if (transmit)
+            f_order <= count ? 64'h2 : 64'h1;
+    end
+
+    assign of_valid_ch0 = output_valid;
+    assign of_order_ch0 = f_order;
+    assign of_insn_ch0  = compressed[0] ? {16'h0, o_inst0[15:0]} : o_inst0;
+    assign of_trap_ch0  = 1'b0; // only set by decode stage and later
+    assign of_halt_ch0  = 1'b0;
+    assign of_intr_ch0  = 1'b0;
+    assign of_mode_ch0  = 2'h3; // machine mode (M)
+    assign of_ixl_ch0   = 2'h2; // 64 bits
+    assign of_pc_rdata_ch0 = pc;
+    assign of_pc_wdata_ch0 = count ? of_pc_rdata_ch1 : next_pc;
+
+    assign of_valid_ch1 = output_valid & count;
+    assign of_order_ch1 = f_order + 64'h1;
+    assign of_insn_ch1  = compressed[1] ? {16'h0, o_inst1[15:0]} : o_inst1;
+    assign of_trap_ch1  = 1'b0; // only set by decode stage and later
+    assign of_halt_ch1  = 1'b0;
+    assign of_intr_ch1  = 1'b0;
+    assign of_mode_ch1  = 2'h3; // machine mode (M)
+    assign of_ixl_ch1   = 2'h2; // 64 bits
+    assign of_pc_rdata_ch1 = compressed ? (pc + 64'h2) : (pc + 64'h4);
+    assign of_pc_wdata_ch1 = next_pc;
+`endif
 
 `ifdef WARP_FORMAL
     reg f_past_valid;

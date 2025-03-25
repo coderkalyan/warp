@@ -35,7 +35,9 @@ module warp_hart_tb ();
         imem_rdata = {32'h08206113, 32'h07800093};
         @(posedge clk); // decode
 
+        // imem_rdata = {32'h08206113, 32'h07800093};
         // imem_rdata = {32'h03206213, 32'h1c200193};
+        @(negedge clk);
         imem_valid = 0;
         imem_rdata = 0;
         @(posedge clk); // issue
@@ -47,8 +49,19 @@ module warp_hart_tb ();
         @(posedge clk); // write back
 
         @(posedge clk); // done
-        $display("%x", hart.xrf.file[1]);
-        $display("%x", hart.xrf.file[2]);
+        $display("cycle 7:");
+        $display("x1: %d", $signed(hart.xrf.file[1]));
+        $display("x2: %d", $signed(hart.xrf.file[2]));
+        $display("x3: %d", $signed(hart.xrf.file[3]));
+        $display("x4: %d", $signed(hart.xrf.file[4]));
+
+        @(posedge clk); // done
+        $display("cycle 8:");
+        $display("x3: %d", $signed(hart.xrf.file[3]));
+        $display("x4: %d", $signed(hart.xrf.file[4]));
+
+        @(posedge clk);
+        @(posedge clk);
 
         $finish;
     end

@@ -46,6 +46,14 @@ module warp_xarith (
     // sign extend the result to 64 bits
     // only used for OP_ADD
     input  wire        i_word,
+`ifdef RISCV_FORMAL
+    input  wire        if_valid,
+    input  wire [31:0] if_inst,
+    input  wire [63:0] if_order,
+    output wire        of_valid,
+    output wire [31:0] of_inst,
+    output wire [63:0] of_order,
+`endif
     // when asserted, o_result contains the result of the arithmetic
     // operation issued on the previous cycle
     output wire        o_valid,
@@ -112,6 +120,27 @@ module warp_xarith (
     assign o_branch = r_branch;
     assign o_result = r_result;
     assign o_rd     = r_rd;
+
+`ifdef RISCV_FORMAL
+    reg        rf_valid;
+    reg [31:0] rf_inst;
+    reg [63:0] rf_order;
+    always @(posedge i_clk, negedge i_rst_n) begin
+        if (!i_rst_n) begin
+            rf_valid <= 1'b0;
+            rf_inst  <= 32'h0;
+            rf_order <= 64'h0;
+        end else begin
+            rf_valid <= if_valid;
+            rf_inst  <= if_inst;
+            rf_order <= if_order;
+        end
+    end
+
+    assign of_valid = rf_valid;
+    assign of_inst  = rf_inst;
+    assign of_order = rf_order;
+`endif
 endmodule
 
 module warp_xlogic (
@@ -146,6 +175,14 @@ module warp_xlogic (
     // sign extend the result to 64 bits
     // only used for OP_SHF
     input  wire        i_word,
+`ifdef RISCV_FORMAL
+    input  wire        if_valid,
+    input  wire [31:0] if_inst,
+    input  wire [63:0] if_order,
+    output wire        of_valid,
+    output wire [31:0] of_inst,
+    output wire [63:0] of_order,
+`endif
     // when asserted, o_result contains the result of the logical
     // operation issued on the previous cycle
     output wire        o_valid,
@@ -198,6 +235,27 @@ module warp_xlogic (
     assign o_valid  = r_valid;
     assign o_result = r_result;
     assign o_rd     = r_rd;
+
+`ifdef RISCV_FORMAL
+    reg        rf_valid;
+    reg [31:0] rf_inst;
+    reg [63:0] rf_order;
+    always @(posedge i_clk, negedge i_rst_n) begin
+        if (!i_rst_n) begin
+            rf_valid <= 1'b0;
+            rf_inst  <= 32'h0;
+            rf_order <= 64'h0;
+        end else begin
+            rf_valid <= if_valid;
+            rf_inst  <= if_inst;
+            rf_order <= if_order;
+        end
+    end
+
+    assign of_valid = rf_valid;
+    assign of_inst  = rf_inst;
+    assign of_order = rf_order;
+`endif
 endmodule
 
 // latency: 2 cycles

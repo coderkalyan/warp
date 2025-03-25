@@ -16,6 +16,19 @@ module warp_decode (
     input  wire [31:0] i_inst0,
     input  wire [31:0] i_inst1,
     input  wire [1:0]  i_compressed,
+`ifdef RISCV_FORMAL
+    `RVFI_METADATA_INPUTS(ch0),
+    `RVFI_PC_INPUTS(ch0),
+    `RVFI_METADATA_INPUTS(ch1),
+    `RVFI_PC_INPUTS(ch1),
+
+    `RVFI_METADATA_OUTPUTS(ch0),
+    `RVFI_PC_OUTPUTS(ch0),
+    `RVFI_REG_OUTPUTS(ch0),
+    `RVFI_METADATA_OUTPUTS(ch1),
+    `RVFI_PC_OUTPUTS(ch1),
+    `RVFI_REG_OUTPUTS(ch1),
+`endif
     // after consuming two instructions from fetch and decoding them, this
     // unit always presents both as valid on the next cycle. however, if
     // issue is not ready (i_output_ready), this unit has to hold the two
@@ -63,20 +76,77 @@ module warp_decode (
         end
     endgenerate
 
+`ifdef RISCV_FORMAL
+    localparam FBUNDLE_SIZE = 1 + 64 + 32 + 7 + 15;
+    wire [FBUNDLE_SIZE - 1:0] f_ibundle [1:0];
+    assign f_ibundle[0] = {decode_raddr[0], if_ixl_ch0, if_mode_ch0, if_intr_ch0, if_halt_ch0, if_trap_ch0, if_insn_ch0, if_order_ch0, if_valid_ch0};
+    assign f_ibundle[1] = {decode_raddr[0], if_ixl_ch1, if_mode_ch1, if_intr_ch1, if_halt_ch1, if_trap_ch1, if_insn_ch1, if_order_ch1, if_valid_ch1};
+`else
+    localparam FBUNDLE_SIZE = 0;
+`endif
+
     // decode always accepts two instructions (if available) but since issue
     // could stall, a skid buffer is required to hold the two instructions
     // until the !o_output_ready signal propogates up the pipeline to the fetch
+    localparam SKID_WIDTH = (FBUNDLE_SIZE * 2) + (`BUNDLE_SIZE * 2);
+    wire [SKID_WIDTH - 1:0] skid_input_data;
+`ifdef RISCV_FORMAL
+    assign skid_input_data = {f_ibundle[1], f_ibundle[0], decode_bundle[1], decode_bundle[0]};
+`else
+    assign skid_input_data = {decode_bundle[1], decode_bundle[0]};
+`endif
+
     wire input_ready, output_valid;
-    wire [`BUNDLE_SIZE - 1:0] bundle [1:0];
+    wire [SKID_WIDTH - 1:0] skid_output_data;
     warp_skid #(
-        .WIDTH(`BUNDLE_SIZE * 2)
+        .WIDTH(SKID_WIDTH)
     ) skid (
         .i_clk(i_clk), .i_rst_n(i_rst_n),
         .i_input_valid(i_input_valid), .o_input_ready(input_ready),
-        .i_input_data({decode_bundle[1], decode_bundle[0]}),
+        .i_input_data(skid_input_data),
         .o_output_valid(output_valid), .i_output_ready(i_output_ready),
-        .o_output_data({bundle[1], bundle[0]})
+        .o_output_data(skid_output_data)
     );
+
+    wire [`BUNDLE_SIZE - 1:0] bundle [1:0];
+    assign bundle[0] = skid_output_data[0 +: `BUNDLE_SIZE ];
+    assign bundle[1] = skid_output_data[`BUNDLE_SIZE +: `BUNDLE_SIZE];
+
+`ifdef RISC_FORMAL
+    wire [FBUNDLE_SIZE - 1:0] f_obundle [1:0];
+    assign f_obundle[0] = skid_output_data[`BUNDLE_SIZE * 2 +: FBUNDLE_SIZE];
+    assign f_obundle[1] = skid_output_data[`BUNDLE_SIZE * 2 + FBUNDLE_SIZE +: FBUNDLE_SIZE];
+
+    assign of_valid_ch0     = f_obundle[0][0] & output_valid;
+    assign of_order_ch0     = f_obundle[0][1  +: 64];
+    assign of_insn_ch0      = f_obundle[0][65 +: 32];
+    assign of_trap_ch0      = f_obundle[0][97];
+    assign of_halt_ch0      = f_obundle[0][98];
+    assign of_intr_ch0      = f_obundle[0][99];
+    assign of_mode_ch0      = f_obundle[0][100 +: 2];
+    assign of_ixl_ch0       = f_obundle[0][102 +: 2];
+    assign of_rs1_addr_ch0  = f_obundle[0][104 +: 5];
+    assign of_rs2_addr_ch0  = f_obundle[0][109 +: 5];
+    assign of_rd_addr_ch0   = f_obundle[0][114 +: 5];
+    assign of_rs1_rdata_ch0 = 64'h0; // filled in at later stage
+    assign of_rs2_rdata_ch0 = 64'h0; // filled in at later stage
+    assign of_rd_wdata_ch0  = 64'h0; // filled in at later stage
+
+    assign of_valid_ch1     = f_obundle[1][0] & output_valid;
+    assign of_order_ch1     = f_obundle[1][1 +: 64];
+    assign of_insn_ch1      = f_obundle[1][65 +: 32];
+    assign of_trap_ch1      = f_obundle[1][97];
+    assign of_halt_ch1      = f_obundle[1][98];
+    assign of_intr_ch1      = f_obundle[1][99];
+    assign of_mode_ch1      = f_obundle[1][100 +: 2];
+    assign of_ixl_ch1       = f_obundle[1][102 +: 2];
+    assign of_rs_ch1_addr1  = f_obundle[1][104 +: 5];
+    assign of_rs2_addr_ch1  = f_obundle[1][109 +: 5];
+    assign of_rd_addr_ch1   = f_obundle[1][114 +: 5];
+    assign of_rs_ch1_rdata1 = 64'h0; // filled in at later stage
+    assign of_rs2_rdata_ch1 = 64'h0; // filled in at later stage
+    assign of_rd_wdata_ch1  = 64'h0; // filled in at later stage
+`endif
 
     assign o_input_ready = input_ready;
     assign o_output_valid = output_valid;
@@ -304,49 +374,49 @@ module warp_udecode (
                     // addi
                     3'b000: begin
                         legal = 1'b1;
-                        pipeline = `PIPE_XARITH;
+                        pipeline = `PIPELINE_XARITH;
                         xarith_opsel = `XARITH_OP_ADD;
                         xarith_word = 1'b0;
                     end
                     // slli
                     3'b001: begin
                         legal = i_inst[31:26] == 6'b000000;
-                        pipeline = `PIPE_XLOGIC;
+                        pipeline = `PIPELINE_XLOGIC;
                         xlogic_opsel = `XLOGIC_OP_SHF;
                         xlogic_word = 1'b0;
                     end
                     // slti, sltiu
                     3'b010, 3'b011: begin
                         legal = 1'b1;
-                        pipeline = `PIPE_XARITH;
+                        pipeline = `PIPELINE_XARITH;
                         xarith_opsel = `XARITH_OP_SLT;
                         xlogic_word = 1'b0;
                     end
                     // xori
                     3'b100: begin
                         legal = 1'b1;
-                        pipeline = `PIPE_XLOGIC;
+                        pipeline = `PIPELINE_XLOGIC;
                         xlogic_opsel = `XLOGIC_OP_XOR;
                         xlogic_word = 1'b0;
                     end
                     // srli, srai
                     3'b101: begin
                         legal = i_inst[31:26] == 6'b000000 || i_inst[31:26] == 6'b010000;
-                        pipeline = `PIPE_XLOGIC;
+                        pipeline = `PIPELINE_XLOGIC;
                         xlogic_opsel = `XLOGIC_OP_SHF;
                         xlogic_word = 1'b0;
                     end
                     // ori
                     3'b110: begin
                         legal = 1'b1;
-                        pipeline = `PIPE_XLOGIC;
+                        pipeline = `PIPELINE_XLOGIC;
                         xlogic_opsel = `XLOGIC_OP_OR;
                         xlogic_word = 1'b0;
                     end
                     // andi
                     3'b111: begin
                         legal = 1'b1;
-                        pipeline = `PIPE_XLOGIC;
+                        pipeline = `PIPELINE_XLOGIC;
                         xlogic_opsel = `XLOGIC_OP_AND;
                         xlogic_word = 1'b0;
                     end
@@ -360,7 +430,7 @@ module warp_udecode (
             // auipc
             op_auipc: begin
                 legal = 1'b1;
-                pipeline = `PIPE_XARITH;
+                pipeline = `PIPELINE_XARITH;
                 op2_sel = 1'b1;
                 xarith_opsel = `XARITH_OP_ADD;
                 xarith_sub = 1'b0;
@@ -372,19 +442,19 @@ module warp_udecode (
                     // addiw
                     3'b000: begin
                         legal = 1'b1;
-                        pipeline = `PIPE_XARITH;
+                        pipeline = `PIPELINE_XARITH;
                         xarith_opsel = `XARITH_OP_ADD;
                     end
                     // slliw
                     3'b001: begin
                         legal = i_inst[31:25] == 7'b0000000;
-                        pipeline = `PIPE_XLOGIC;
+                        pipeline = `PIPELINE_XLOGIC;
                         xlogic_opsel = `XLOGIC_OP_SHF;
                     end
                     // srliw, sraiw
                     3'b101: begin
                         legal = i_inst[31:25] == 7'b0000000 || i_inst[31:25] == 7'b0100000;
-                        pipeline = `PIPE_XLOGIC;
+                        pipeline = `PIPELINE_XLOGIC;
                         xlogic_opsel = `XLOGIC_OP_SHF;
                     end
                 endcase
@@ -401,43 +471,43 @@ module warp_udecode (
                     // add, sub
                     3'b000: begin
                         legal = funct7 == 7'b0000000 || funct7 == 7'b0100000;
-                        pipeline = `PIPE_XARITH;
+                        pipeline = `PIPELINE_XARITH;
                         xarith_opsel = `XARITH_OP_ADD;
                     end
                     // sll
                     3'b001: begin
                         legal = funct7 == 7'b0000000;
-                        pipeline = `PIPE_XLOGIC;
+                        pipeline = `PIPELINE_XLOGIC;
                         xlogic_opsel = `XLOGIC_OP_SHF;
                     end
                     // slt, sltu
                     3'b010, 3'b011: begin
                         legal = 1'b1;
-                        pipeline = `PIPE_XARITH;
+                        pipeline = `PIPELINE_XARITH;
                         xarith_opsel = `XARITH_OP_SLT;
                     end
                     // xor
                     3'b100: begin
                         legal = 1'b1;
-                        pipeline = `PIPE_XLOGIC;
+                        pipeline = `PIPELINE_XLOGIC;
                         xlogic_opsel = `XLOGIC_OP_XOR;
                     end
                     // srl, sra
                     3'b101: begin
                         legal = funct7 == 7'b0000000 || funct7 == 7'b0100000;
-                        pipeline = `PIPE_XLOGIC;
+                        pipeline = `PIPELINE_XLOGIC;
                         xlogic_opsel = `XLOGIC_OP_SHF;
                     end
                     // or
                     3'b110: begin
                         legal = 1'b1;
-                        pipeline = `PIPE_XLOGIC;
+                        pipeline = `PIPELINE_XLOGIC;
                         xlogic_opsel = `XLOGIC_OP_OR;
                     end
                     // and
                     3'b111: begin
                         legal = 1'b1;
-                        pipeline = `PIPE_XLOGIC;
+                        pipeline = `PIPELINE_XLOGIC;
                         xlogic_opsel = `XLOGIC_OP_AND;
                     end
                 endcase
@@ -452,7 +522,7 @@ module warp_udecode (
             // lui
             op_lui: begin
                 legal = 1'b1;
-                pipeline = `PIPE_XARITH;
+                pipeline = `PIPELINE_XARITH;
                 op2_sel = 1'b1;
                 xarith_opsel = `XARITH_OP_ADD;
                 xarith_sub = 1'b0;
@@ -463,19 +533,19 @@ module warp_udecode (
                     // addw, subw
                     3'b000: begin
                         legal = funct7 == 7'b0000000 || funct7 == 7'b0100000;
-                        pipeline = `PIPE_XARITH;
+                        pipeline = `PIPELINE_XARITH;
                         xarith_opsel = `XARITH_OP_ADD;
                     end
                     // sllw
                     3'b001: begin
                         legal = funct7 == 7'b0000000;
-                        pipeline = `PIPE_XLOGIC;
+                        pipeline = `PIPELINE_XLOGIC;
                         xlogic_opsel = `XLOGIC_OP_SHF;
                     end
                     // srlw, sraw
                     3'b101: begin
                         legal = funct7 == 7'b0000000 || funct7 == 7'b0100000;
-                        pipeline = `PIPE_XLOGIC;
+                        pipeline = `PIPELINE_XLOGIC;
                         xlogic_opsel = `XLOGIC_OP_SHF;
                     end
                 endcase
@@ -657,13 +727,13 @@ module warp_cdecode (
             // op_addi4spn: begin
             //     // TODO: invalid if immediate is zero
             //     valid = 1'b1;
-            //     pipeline = `PIPE_XARITH;
+            //     pipeline = `PIPELINE_XARITH;
             //     xarith_opsel = `XARITH_OP_ADD;
             // end
             // slli
             op_addi4spn: begin
                 //TODO: valid = (nzuimm != 8'd0);
-                pipeline = `PIPE_XARITH;
+                pipeline = `PIPELINE_XARITH;
                 xarith_opsel = `XARITH_OP_ADD;
                 xarith_sub = 1'b0;
                 rd = rsp;
@@ -672,7 +742,7 @@ module warp_cdecode (
             end
             op_li: begin
                 valid = rs1_rd != 5'd0;
-                pipeline = `PIPE_XARITH;
+                pipeline = `PIPELINE_XARITH;
                 xarith_opsel = `XARITH_OP_ADD;
                 xarith_sub = 1'b0;
                 rd = rs1_rd;
@@ -680,7 +750,7 @@ module warp_cdecode (
             end
             op_lui: begin
                 valid = (rs1_rd != 5'd0) & (rs1 != 5'd2);
-                pipeline = `PIPE_XARITH;
+                pipeline = `PIPELINE_XARITH;
                 xarith_opsel = `XARITH_OP_ADD;
                 xarith_sub = 1'b0;
                 rd = rs1_rd;
@@ -688,7 +758,7 @@ module warp_cdecode (
             end
             op_slli: begin
                 valid = rs1_rd != 5'd0;
-                pipeline = `PIPE_XLOGIC;
+                pipeline = `PIPELINE_XLOGIC;
                 xlogic_opsel = `XLOGIC_OP_SHF;
                 rd = rd_rs1;
                 rs1 = rd_rs1;
@@ -697,7 +767,7 @@ module warp_cdecode (
             // mv, add
             op_jalr: begin
                 valid = (rs1_rd != 5'd0) && (rs2 != 5'd0);
-                pipeline = `PIPE_XARITH;
+                pipeline = `PIPELINE_XARITH;
                 xarith_opsel = `XARITH_OP_ADD;
                 xarith_sub = 1'b0;
                 rd = rd_rs1;
@@ -714,13 +784,13 @@ module warp_cdecode (
                     // srli, srai
                     2'b00, 2'b01: begin
                         valid = 1'b1;
-                        pipeline = `PIPE_XLOGIC;
+                        pipeline = `PIPELINE_XLOGIC;
                         xlogic_opsel = `XLOGIC_OP_SHF;
                         // TODO: add control signal for direction, arithmetic
                     end
                     2'b10: begin
                         valid = 1'b1;
-                        pipeline = `PIPE_XLOGIC;
+                        pipeline = `PIPELINE_XLOGIC;
                         xlogic_opsel = `XLOGIC_OP_AND;
                     end
                     // and, or, xor, sub, addw, subw
@@ -729,32 +799,32 @@ module warp_cdecode (
                             // sub
                             3'b000: begin
                                 valid = 1'b1;
-                                pipeline = `PIPE_XARITH;
+                                pipeline = `PIPELINE_XARITH;
                                 xarith_opsel = `XARITH_OP_ADD;
                                 xarith_sub = 1'b1;
                             end
                             // xor
                             3'b001: begin
                                 valid = 1'b1;
-                                pipeline = `PIPE_XLOGIC;
+                                pipeline = `PIPELINE_XLOGIC;
                                 xlogic_opsel = `XLOGIC_OP_XOR;
                             end
                             // or
                             3'b010: begin
                                 valid = 1'b1;
-                                pipeline = `PIPE_XLOGIC;
+                                pipeline = `PIPELINE_XLOGIC;
                                 xlogic_opsel = `XLOGIC_OP_OR;
                             end
                             // and
                             3'b011: begin
                                 valid = 1'b1;
-                                pipeline = `PIPE_XLOGIC;
+                                pipeline = `PIPELINE_XLOGIC;
                                 xlogic_opsel = `XLOGIC_OP_AND;
                             end
                             // subw, addw
                             3'b100, 3'b101, 3'b110, 3'b111: begin
                                 valid = i_inst[6] == 1'b0;
-                                pipeline = `PIPE_XARITH;
+                                pipeline = `PIPELINE_XARITH;
                                 xarith_opsel = `XARITH_OP_ADD;
                                 xarith_sub = 1'b1;
                                 // TODO: mark lower 32
