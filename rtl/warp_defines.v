@@ -30,70 +30,70 @@
 `define AHB_HTRANS_SEQ    2'h3
 
 `define RVFI_METADATA_INPUTS(i) \
-	input  wire        if_valid_``i, \
-	input  wire [63:0] if_order_``i, \
-	input  wire [31:0] if_insn_``i, \
-	input  wire        if_trap_``i, \
-	input  wire        if_halt_``i, \
-	input  wire        if_intr_``i, \
-	input  wire [ 1:0] if_mode_``i, \
-	input  wire [ 1:0] if_ixl_``i
+	input  wire        if_valid``i, \
+	input  wire [63:0] if_order``i, \
+	input  wire [31:0] if_insn``i, \
+	input  wire        if_trap``i, \
+	input  wire        if_halt``i, \
+	input  wire        if_intr``i, \
+	input  wire [ 1:0] if_mode``i, \
+	input  wire [ 1:0] if_ixl``i
 
 `define RVFI_METADATA_REGS(i) \
-	reg         rf_valid_``i, \
-	reg  [63:0] rf_order_``i, \
-	reg  [31:0] rf_insn_``i, \
-	reg         rf_trap_``i, \
-	reg         rf_halt_``i, \
-	reg         rf_intr_``i, \
-	reg  [ 1:0] rf_mode_``i, \
-	reg  [ 1:0] rf_ixl_``i
+	reg         rf_valid``i, \
+	reg  [63:0] rf_order``i, \
+	reg  [31:0] rf_insn``i, \
+	reg         rf_trap``i, \
+	reg         rf_halt``i, \
+	reg         rf_intr``i, \
+	reg  [ 1:0] rf_mode``i, \
+	reg  [ 1:0] rf_ixl``i
 
 `define RVFI_METADATA_OUTPUTS(i) \
-	output wire        of_valid_``i, \
-	output wire [63:0] of_order_``i, \
-	output wire [31:0] of_insn_``i, \
-	output wire        of_trap_``i, \
-	output wire        of_halt_``i, \
-	output wire        of_intr_``i, \
-	output wire [ 1:0] of_mode_``i, \
-	output wire [ 1:0] of_ixl_``i
+	output wire        of_valid``i, \
+	output wire [63:0] of_order``i, \
+	output wire [31:0] of_insn``i, \
+	output wire        of_trap``i, \
+	output wire        of_halt``i, \
+	output wire        of_intr``i, \
+	output wire [ 1:0] of_mode``i, \
+	output wire [ 1:0] of_ixl``i
 
 `define RVFI_PC_INPUTS(i) \
-	input  wire [63:0] if_pc_rdata_``i, \
-	input  wire [63:0] if_pc_wdata_``i
+	input  wire [63:0] if_pc_rdata``i, \
+	input  wire [63:0] if_pc_wdata``i
 
 `define RVFI_PC_REGS(i) \
-	reg  [63:0] rf_pc_rdata_``i, \
-	reg  [63:0] rf_pc_wdata_``i
+	reg  [63:0] rf_pc_rdata``i, \
+	reg  [63:0] rf_pc_wdata``i
 
 `define RVFI_PC_OUTPUTS(i) \
-	output wire [63:0] of_pc_rdata_``i, \
-	output wire [63:0] of_pc_wdata_``i
+	output wire [63:0] of_pc_rdata``i, \
+	output wire [63:0] of_pc_wdata``i
 
 `define RVFI_REG_INPUTS(i) \
-	input  wire [ 4:0] if_rs1_addr_``i, \
-	input  wire [ 4:0] if_rs2_addr_``i, \
-	input  wire [63:0] if_rs1_rdata_``i, \
-	input  wire [63:0] if_rs2_rdata_``i, \
-	input  wire [ 4:0] if_rd_addr_``i, \
-	input  wire [63:0] if_rd_wdata_``i
+	input  wire [ 4:0] if_rs1_addr``i, \
+	input  wire [ 4:0] if_rs2_addr``i, \
+	input  wire [63:0] if_rs1_rdata``i, \
+	input  wire [63:0] if_rs2_rdata``i, \
+	input  wire [ 4:0] if_rd_addr``i, \
+	input  wire [63:0] if_rd_wdata``i
 
 `define RVFI_REG_REGS(i) \
-	reg  [ 4:0] rf_rs1_addr_``i, \
-	reg  [ 4:0] rf_rs2_addr_``i, \
-	reg  [63:0] rf_rs1_rdata_``i, \
-	reg  [63:0] rf_rs2_rdata_``i, \
-	reg  [ 4:0] rf_rd_addr_``i, \
-	reg  [63:0] rf_rd_wdata_``i
+	reg  [ 4:0] rf_rs1_addr``i, \
+	reg  [ 4:0] rf_rs2_addr``i, \
+	reg  [63:0] rf_rs1_rdata``i, \
+	reg  [63:0] rf_rs2_rdata``i, \
+	reg  [ 4:0] rf_rd_addr``i, \
+	reg  [63:0] rf_rd_wdata``i
 
 `define RVFI_REG_OUTPUTS(i) \
-	output wire [ 4:0] of_rs1_addr_``i, \
-	output wire [ 4:0] of_rs2_addr_``i, \
-	output wire [63:0] of_rs1_rdata_``i, \
-	output wire [63:0] of_rs2_rdata_``i, \
-	output wire [ 4:0] of_rd_addr_``i, \
-	output wire [63:0] of_rd_wdata_``i
+	output wire [ 4:0] of_rs1_addr``i, \
+	output wire [ 4:0] of_rs2_addr``i, \
+	output wire [63:0] of_rs1_rdata``i, \
+	output wire [63:0] of_rs2_rdata``i, \
+	output wire [ 4:0] of_rd_addr``i, \
+	output wire [63:0] of_rd_wdata``i
 
 `define CANONICAL_NOP 32'h00000013
 `define BUNDLE_SIZE 68

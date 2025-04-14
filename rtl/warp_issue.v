@@ -11,12 +11,12 @@ module warp_issue (
     input  wire [`BUNDLE_SIZE - 1:0] i_bundle0,
     input  wire [`BUNDLE_SIZE - 1:0] i_bundle1,
 `ifdef RISCV_FORMAL
-    `RVFI_METADATA_INPUTS(ch0),
-    `RVFI_PC_INPUTS(ch0),
-    `RVFI_REG_INPUTS(ch0),
-    `RVFI_METADATA_INPUTS(ch1),
-    `RVFI_PC_INPUTS(ch1),
-    `RVFI_REG_INPUTS(ch1),
+    `RVFI_METADATA_INPUTS(_ch0),
+    `RVFI_PC_INPUTS(_ch0),
+    `RVFI_REG_INPUTS(_ch0),
+    `RVFI_METADATA_INPUTS(_ch1),
+    `RVFI_PC_INPUTS(_ch1),
+    `RVFI_REG_INPUTS(_ch1),
 `endif
     // reading data from registers happens on the clock edge that an
     // instruction leaves issue and enters one of the functional units
@@ -43,9 +43,9 @@ module warp_issue (
     output wire        o_xarith_valid,
     input  wire        i_xarith_ready,
 `ifdef RISCV_FORMAL
-    `RVFI_METADATA_OUTPUTS(xarith),
-    `RVFI_PC_OUTPUTS(xarith),
-    `RVFI_REG_OUTPUTS(xarith),
+    `RVFI_METADATA_OUTPUTS(_xarith),
+    `RVFI_PC_OUTPUTS(_xarith),
+    `RVFI_REG_OUTPUTS(_xarith),
 `endif
     // interface to integer logic pipeline
     // op1 is always rs1, op2 is either rs2 or immediate
@@ -60,9 +60,9 @@ module warp_issue (
     output wire        o_xlogic_valid,
     input  wire        i_xlogic_ready,
 `ifdef RISCV_FORMAL
-    `RVFI_METADATA_OUTPUTS(xlogic),
-    `RVFI_PC_OUTPUTS(xlogic),
-    `RVFI_REG_OUTPUTS(xlogic),
+    `RVFI_METADATA_OUTPUTS(_xlogic),
+    `RVFI_PC_OUTPUTS(_xlogic),
+    `RVFI_REG_OUTPUTS(_xlogic),
 `endif
     // interface to integer shift/rotate pipeline
     // xshift_operand is always rs1

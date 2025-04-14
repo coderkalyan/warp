@@ -163,6 +163,7 @@ module warp_hart #(
     wire [31:0] f_issue_insn_xarith;
     wire        f_issue_trap_xarith, f_issue_halt_xarith, f_issue_intr_xarith;
     wire [ 1:0] f_issue_mode_xarith, f_issue_ixl_xarith;
+    wire [63:0] f_issue_pc_rdata_xarith, f_issue_pc_wdata_xarith;
     wire [ 4:0] f_issue_rs1_addr_xarith, f_issue_rs2_addr_xarith, f_issue_rd_addr_xarith;
     wire [63:0] f_issue_rs1_rdata_xarith, f_issue_rs2_rdata_xarith, f_issue_rd_wdata_xarith;
     wire        f_issue_valid_xlogic;
@@ -170,6 +171,7 @@ module warp_hart #(
     wire [31:0] f_issue_insn_xlogic;
     wire        f_issue_trap_xlogic, f_issue_halt_xlogic, f_issue_intr_xlogic;
     wire [ 1:0] f_issue_mode_xlogic, f_issue_ixl_xlogic;
+    wire [63:0] f_issue_pc_rdata_xlogic, f_issue_pc_wdata_xlogic;
     wire [ 4:0] f_issue_rs1_addr_xlogic, f_issue_rs2_addr_xlogic, f_issue_rd_addr_xlogic;
     wire [63:0] f_issue_rs1_rdata_xlogic, f_issue_rs2_rdata_xlogic, f_issue_rd_wdata_xlogic;
 `endif
@@ -308,6 +310,24 @@ module warp_hart #(
     wire        f_xarith_write_valid;
     wire [31:0] f_xarith_write_inst;
     wire [63:0] f_xarith_write_order;
+`ifdef RISCV_FORMAL
+    wire        f_xarith_valid;
+    wire [63:0] f_xarith_order;
+    wire [31:0] f_xarith_insn;
+    wire        f_xarith_trap;
+    wire        f_xarith_halt;
+    wire        f_xarith_intr;
+    wire [ 1:0] f_xarith_mode;
+    wire [ 1:0] f_xarith_ixl;
+    wire [63:0] f_xarith_pc_rdata;
+    wire [63:0] f_xarith_pc_wdata;
+    wire [ 4:0] f_xarith_rs1_addr;
+    wire [ 4:0] f_xarith_rs2_addr;
+    wire [63:0] f_xarith_rs1_rdata;
+    wire [63:0] f_xarith_rs2_rdata;
+    wire [ 4:0] f_xarith_rd_addr;
+    wire [63:0] f_xarith_rd_wdata;
+`endif
     warp_xarith xarith (
         .i_clk(i_clk),
         .i_rst_n(i_rst_n),
@@ -323,12 +343,38 @@ module warp_hart #(
         .i_branch_invert(xarith_branch_invert),
         .i_word(xarith_word),
 `ifdef RISCV_FORMAL
-        // .if_valid(f_xarith_valid),
-        // .if_inst(f_xarith_inst),
-        // .if_order(f_xarith_order),
-        // .of_valid(f_xarith_write_valid),
-        // .of_inst(f_xarith_write_inst),
-        // .of_order(f_xarith_write_order),
+        .if_valid       (f_issue_valid_xarith),
+        .if_order       (f_issue_order_xarith),
+        .if_insn        (f_issue_insn_xarith),
+        .if_trap        (f_issue_trap_xarith),
+        .if_halt        (f_issue_halt_xarith),
+        .if_intr        (f_issue_intr_xarith),
+        .if_mode        (f_issue_mode_xarith),
+        .if_ixl         (f_issue_ixl_xarith),
+        .if_pc_rdata    (f_issue_pc_rdata_xarith),
+        .if_pc_wdata    (f_issue_pc_wdata_xarith),
+        .if_rs1_addr    (f_issue_rs1_addr_xarith),
+        .if_rs2_addr    (f_issue_rs2_addr_xarith),
+        .if_rs1_rdata   (f_issue_rs1_rdata_xarith),
+        .if_rs2_rdata   (f_issue_rs2_rdata_xarith),
+        .if_rd_addr     (f_issue_rd_addr_xarith),
+        .if_rd_wdata    (f_issue_rd_wdata_xarith),
+        .of_valid       (f_xarith_valid),
+        .of_order       (f_xarith_order),
+        .of_insn        (f_xarith_insn),
+        .of_trap        (f_xarith_trap),
+        .of_halt        (f_xarith_halt),
+        .of_intr        (f_xarith_intr),
+        .of_mode        (f_xarith_mode),
+        .of_ixl         (f_xarith_ixl),
+        .of_pc_rdata    (f_xarith_pc_rdata),
+        .of_pc_wdata    (f_xarith_pc_wdata),
+        .of_rs1_addr    (f_xarith_rs1_addr),
+        .of_rs2_addr    (f_xarith_rs2_addr),
+        .of_rs1_rdata   (f_xarith_rs1_rdata),
+        .of_rs2_rdata   (f_xarith_rs2_rdata),
+        .of_rd_addr     (f_xarith_rd_addr),
+        .of_rd_wdata    (f_xarith_rd_wdata),
 `endif
         .o_valid(xarith_wen),
         .o_result(xarith_result),
@@ -346,6 +392,24 @@ module warp_hart #(
     wire        f_xlogic_write_valid;
     wire [31:0] f_xlogic_write_inst;
     wire [63:0] f_xlogic_write_order;
+`ifdef RISCV_FORMAL
+    wire        f_xlogic_valid;
+    wire [63:0] f_xlogic_order;
+    wire [31:0] f_xlogic_insn;
+    wire        f_xlogic_trap;
+    wire        f_xlogic_halt;
+    wire        f_xlogic_intr;
+    wire [ 1:0] f_xlogic_mode;
+    wire [ 1:0] f_xlogic_ixl;
+    wire [63:0] f_xlogic_pc_rdata;
+    wire [63:0] f_xlogic_pc_wdata;
+    wire [ 4:0] f_xlogic_rs1_addr;
+    wire [ 4:0] f_xlogic_rs2_addr;
+    wire [63:0] f_xlogic_rs1_rdata;
+    wire [63:0] f_xlogic_rs2_rdata;
+    wire [ 4:0] f_xlogic_rd_addr;
+    wire [63:0] f_xlogic_rd_wdata;
+`endif
     warp_xlogic xlogic (
         .i_clk(i_clk),
         .i_rst_n(i_rst_n),
@@ -358,12 +422,38 @@ module warp_hart #(
         .i_sll(xlogic_sll),
         .i_word(xlogic_word),
 `ifdef RISCV_FORMAL
-        // .if_valid(f_xlogic_valid),
-        // .if_inst(f_xlogic_inst),
-        // .if_order(f_xlogic_order),
-        // .of_valid(f_xlogic_write_valid),
-        // .of_inst(f_xlogic_write_inst),
-        // .of_order(f_xlogic_write_order),
+        .if_valid       (f_issue_valid_xlogic),
+        .if_order       (f_issue_order_xlogic),
+        .if_insn        (f_issue_insn_xlogic),
+        .if_trap        (f_issue_trap_xlogic),
+        .if_halt        (f_issue_halt_xlogic),
+        .if_intr        (f_issue_intr_xlogic),
+        .if_mode        (f_issue_mode_xlogic),
+        .if_ixl         (f_issue_ixl_xlogic),
+        .if_pc_rdata    (f_issue_pc_rdata_xlogic),
+        .if_pc_wdata    (f_issue_pc_wdata_xlogic),
+        .if_rs1_addr    (f_issue_rs1_addr_xlogic),
+        .if_rs2_addr    (f_issue_rs2_addr_xlogic),
+        .if_rs1_rdata   (f_issue_rs1_rdata_xlogic),
+        .if_rs2_rdata   (f_issue_rs2_rdata_xlogic),
+        .if_rd_addr     (f_issue_rd_addr_xlogic),
+        .if_rd_wdata    (f_issue_rd_wdata_xlogic),
+        .of_valid       (f_xlogic_valid),
+        .of_order       (f_xlogic_order),
+        .of_insn        (f_xlogic_insn),
+        .of_trap        (f_xlogic_trap),
+        .of_halt        (f_xlogic_halt),
+        .of_intr        (f_xlogic_intr),
+        .of_mode        (f_xlogic_mode),
+        .of_ixl         (f_xlogic_ixl),
+        .of_pc_rdata    (f_xlogic_pc_rdata),
+        .of_pc_wdata    (f_xlogic_pc_wdata),
+        .of_rs1_addr    (f_xlogic_rs1_addr),
+        .of_rs2_addr    (f_xlogic_rs2_addr),
+        .of_rs1_rdata   (f_xlogic_rs1_rdata),
+        .of_rs2_rdata   (f_xlogic_rs2_rdata),
+        .of_rd_addr     (f_xlogic_rd_addr),
+        .of_rd_wdata    (f_xlogic_rd_wdata),
 `endif
         .o_valid(xlogic_wen),
         .o_result(xlogic_result),

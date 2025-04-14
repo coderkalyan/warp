@@ -61,7 +61,7 @@ def rvfi_defines(name, ports):
 
     s += f"`define RVFI_{name.upper()}_INPUTS(i) \\\n"
     for i, line in enumerate(rvfi_inputs(ports)):
-        s += f"\t{line}_``i"
+        s += f"\t{line}``i"
         if i < len(ports) - 1:
             s += ", \\"
         s += "\n"
@@ -69,7 +69,7 @@ def rvfi_defines(name, ports):
 
     s += f"`define RVFI_{name.upper()}_REGS(i) \\\n"
     for i, line in enumerate(rvfi_regs(ports)):
-        s += f"\t{line}_``i"
+        s += f"\t{line}``i"
         if i < len(ports) - 1:
             s += ", \\"
         s += "\n"
@@ -77,7 +77,7 @@ def rvfi_defines(name, ports):
 
     s += f"`define RVFI_{name.upper()}_OUTPUTS(i) \\\n"
     for i, line in enumerate(rvfi_outputs(ports)):
-        s += f"\t{line}_``i"
+        s += f"\t{line}``i"
         if i < len(ports) - 1:
             s += ", \\"
         s += "\n"

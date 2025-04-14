@@ -17,17 +17,17 @@ module warp_decode (
     input  wire [31:0] i_inst1,
     input  wire [1:0]  i_compressed,
 `ifdef RISCV_FORMAL
-    `RVFI_METADATA_INPUTS(ch0),
-    `RVFI_PC_INPUTS(ch0),
-    `RVFI_METADATA_INPUTS(ch1),
-    `RVFI_PC_INPUTS(ch1),
+    `RVFI_METADATA_INPUTS(_ch0),
+    `RVFI_PC_INPUTS(_ch0),
+    `RVFI_METADATA_INPUTS(_ch1),
+    `RVFI_PC_INPUTS(_ch1),
 
-    `RVFI_METADATA_OUTPUTS(ch0),
-    `RVFI_PC_OUTPUTS(ch0),
-    `RVFI_REG_OUTPUTS(ch0),
-    `RVFI_METADATA_OUTPUTS(ch1),
-    `RVFI_PC_OUTPUTS(ch1),
-    `RVFI_REG_OUTPUTS(ch1),
+    `RVFI_METADATA_OUTPUTS(_ch0),
+    `RVFI_PC_OUTPUTS(_ch0),
+    `RVFI_REG_OUTPUTS(_ch0),
+    `RVFI_METADATA_OUTPUTS(_ch1),
+    `RVFI_PC_OUTPUTS(_ch1),
+    `RVFI_REG_OUTPUTS(_ch1),
 `endif
     // after consuming two instructions from fetch and decoding them, this
     // unit always presents both as valid on the next cycle. however, if

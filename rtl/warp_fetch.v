@@ -42,10 +42,10 @@ module warp_fetch #(
     // instructions output here.
     input  wire        i_output_ready,
 `ifdef RISCV_FORMAL
-    `RVFI_METADATA_OUTPUTS(ch0),
-    `RVFI_PC_OUTPUTS(ch0),
-    `RVFI_METADATA_OUTPUTS(ch1),
-    `RVFI_PC_OUTPUTS(ch1),
+    `RVFI_METADATA_OUTPUTS(_ch0),
+    `RVFI_PC_OUTPUTS(_ch0),
+    `RVFI_METADATA_OUTPUTS(_ch1),
+    `RVFI_PC_OUTPUTS(_ch1),
 `endif
     output wire [31:0] o_inst0,
     output wire [31:0] o_inst1,

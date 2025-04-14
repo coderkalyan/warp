@@ -47,12 +47,12 @@ module warp_xarith (
     // only used for OP_ADD
     input  wire        i_word,
 `ifdef RISCV_FORMAL
-    input  wire        if_valid,
-    input  wire [31:0] if_inst,
-    input  wire [63:0] if_order,
-    output wire        of_valid,
-    output wire [31:0] of_inst,
-    output wire [63:0] of_order,
+    `RVFI_METADATA_INPUTS(),
+    `RVFI_PC_INPUTS(),
+    `RVFI_REG_INPUTS(),
+    `RVFI_METADATA_OUTPUTS(),
+    `RVFI_PC_OUTPUTS(),
+    `RVFI_REG_OUTPUTS(),
 `endif
     // when asserted, o_result contains the result of the arithmetic
     // operation issued on the previous cycle
@@ -123,23 +123,75 @@ module warp_xarith (
 
 `ifdef RISCV_FORMAL
     reg        rf_valid;
-    reg [31:0] rf_inst;
     reg [63:0] rf_order;
+    reg [31:0] rf_insn;
+    reg        rf_trap;
+    reg        rf_halt;
+    reg        rf_intr;
+    reg [ 1:0] rf_mode;
+    reg [ 1:0] rf_ixl;
+    reg [63:0] rf_pc_rdata;
+    reg [63:0] rf_pc_wdata;
+    reg [ 4:0] rf_rs1_addr;
+    reg [ 4:0] rf_rs2_addr;
+    reg [63:0] rf_rs1_rdata;
+    reg [63:0] rf_rs2_rdata;
+    reg [ 4:0] rf_rd_addr;
+    reg [63:0] rf_rd_wdata;
     always @(posedge i_clk, negedge i_rst_n) begin
         if (!i_rst_n) begin
-            rf_valid <= 1'b0;
-            rf_inst  <= 32'h0;
-            rf_order <= 64'h0;
+            rf_valid       <= 1'b0;
+            rf_order       <= 64'h0;
+            rf_insn        <= 32'h0;
+            rf_trap        <= 1'b0;
+            rf_halt        <= 1'b0;
+            rf_intr        <= 1'b0;
+            rf_mode        <= 2'b0;
+            rf_ixl         <= 2'b0;
+            rf_pc_rdata    <= 64'h0;
+            rf_pc_wdata    <= 64'h0;
+            rf_rs1_addr    <= 5'h0;
+            rf_rs2_addr    <= 5'h0;
+            rf_rs1_rdata   <= 64'h0;
+            rf_rs2_rdata   <= 64'h0;
+            rf_rd_addr     <= 5'h0;
+            rf_rd_wdata    <= 64'h0;
         end else begin
-            rf_valid <= if_valid;
-            rf_inst  <= if_inst;
-            rf_order <= if_order;
+            rf_valid       <= if_valid;
+            rf_order       <= if_order;
+            rf_insn        <= if_insn;
+            rf_trap        <= if_trap;
+            rf_halt        <= if_halt;
+            rf_intr        <= if_intr;
+            rf_mode        <= if_mode;
+            rf_ixl         <= if_ixl;
+            rf_pc_rdata    <= if_pc_rdata;
+            rf_pc_wdata    <= if_pc_wdata;
+            rf_rs1_addr    <= if_rs1_addr;
+            rf_rs2_addr    <= if_rs2_addr;
+            rf_rs1_rdata   <= if_rs1_rdata;
+            rf_rs2_rdata   <= if_rs2_rdata;
+            rf_rd_addr     <= if_rd_addr;
+            rf_rd_wdata    <= if_rd_wdata;
         end
     end
 
-    assign of_valid = rf_valid;
-    assign of_inst  = rf_inst;
-    assign of_order = rf_order;
+    assign of_valid       = rf_valid;
+    assign of_order       = rf_order;
+    assign of_insn        = rf_insn;
+    assign of_trap        = rf_trap;
+    assign of_halt        = rf_halt;
+    assign of_intr        = rf_intr;
+    assign of_mode        = rf_mode;
+    assign of_ixl         = rf_ixl;
+    assign of_pc_rdata    = rf_pc_rdata;
+    assign of_pc_wdata    = rf_pc_wdata;
+    assign of_rs1_addr    = rf_rs1_addr;
+    assign of_rs2_addr    = rf_rs2_addr;
+    assign of_rs1_rdata   = rf_rs1_rdata;
+    assign of_rs2_rdata   = rf_rs2_rdata;
+    assign of_rd_addr     = rf_rd_addr;
+    assign of_rd_wdata    = rf_rd_wdata;
 `endif
 endmodule
 
@@ -176,12 +228,12 @@ module warp_xlogic (
     // only used for OP_SHF
     input  wire        i_word,
 `ifdef RISCV_FORMAL
-    input  wire        if_valid,
-    input  wire [31:0] if_inst,
-    input  wire [63:0] if_order,
-    output wire        of_valid,
-    output wire [31:0] of_inst,
-    output wire [63:0] of_order,
+    `RVFI_METADATA_INPUTS(),
+    `RVFI_PC_INPUTS(),
+    `RVFI_REG_INPUTS(),
+    `RVFI_METADATA_OUTPUTS(),
+    `RVFI_PC_OUTPUTS(),
+    `RVFI_REG_OUTPUTS(),
 `endif
     // when asserted, o_result contains the result of the logical
     // operation issued on the previous cycle
@@ -238,23 +290,75 @@ module warp_xlogic (
 
 `ifdef RISCV_FORMAL
     reg        rf_valid;
-    reg [31:0] rf_inst;
     reg [63:0] rf_order;
+    reg [31:0] rf_insn;
+    reg        rf_trap;
+    reg        rf_halt;
+    reg        rf_intr;
+    reg [ 1:0] rf_mode;
+    reg [ 1:0] rf_ixl;
+    reg [63:0] rf_pc_rdata;
+    reg [63:0] rf_pc_wdata;
+    reg [ 4:0] rf_rs1_addr;
+    reg [ 4:0] rf_rs2_addr;
+    reg [63:0] rf_rs1_rdata;
+    reg [63:0] rf_rs2_rdata;
+    reg [ 4:0] rf_rd_addr;
+    reg [63:0] rf_rd_wdata;
     always @(posedge i_clk, negedge i_rst_n) begin
         if (!i_rst_n) begin
-            rf_valid <= 1'b0;
-            rf_inst  <= 32'h0;
-            rf_order <= 64'h0;
+            rf_valid       <= 1'b0;
+            rf_order       <= 64'h0;
+            rf_insn        <= 32'h0;
+            rf_trap        <= 1'b0;
+            rf_halt        <= 1'b0;
+            rf_intr        <= 1'b0;
+            rf_mode        <= 2'b0;
+            rf_ixl         <= 2'b0;
+            rf_pc_rdata    <= 64'h0;
+            rf_pc_wdata    <= 64'h0;
+            rf_rs1_addr    <= 5'h0;
+            rf_rs2_addr    <= 5'h0;
+            rf_rs1_rdata   <= 64'h0;
+            rf_rs2_rdata   <= 64'h0;
+            rf_rd_addr     <= 5'h0;
+            rf_rd_wdata    <= 64'h0;
         end else begin
-            rf_valid <= if_valid;
-            rf_inst  <= if_inst;
-            rf_order <= if_order;
+            rf_valid       <= if_valid;
+            rf_order       <= if_order;
+            rf_insn        <= if_insn;
+            rf_trap        <= if_trap;
+            rf_halt        <= if_halt;
+            rf_intr        <= if_intr;
+            rf_mode        <= if_mode;
+            rf_ixl         <= if_ixl;
+            rf_pc_rdata    <= if_pc_rdata;
+            rf_pc_wdata    <= if_pc_wdata;
+            rf_rs1_addr    <= if_rs1_addr;
+            rf_rs2_addr    <= if_rs2_addr;
+            rf_rs1_rdata   <= if_rs1_rdata;
+            rf_rs2_rdata   <= if_rs2_rdata;
+            rf_rd_addr     <= if_rd_addr;
+            rf_rd_wdata    <= if_rd_wdata;
         end
     end
 
-    assign of_valid = rf_valid;
-    assign of_inst  = rf_inst;
-    assign of_order = rf_order;
+    assign of_valid       = rf_valid;
+    assign of_order       = rf_order;
+    assign of_insn        = rf_insn;
+    assign of_trap        = rf_trap;
+    assign of_halt        = rf_halt;
+    assign of_intr        = rf_intr;
+    assign of_mode        = rf_mode;
+    assign of_ixl         = rf_ixl;
+    assign of_pc_rdata    = rf_pc_rdata;
+    assign of_pc_wdata    = rf_pc_wdata;
+    assign of_rs1_addr    = rf_rs1_addr;
+    assign of_rs2_addr    = rf_rs2_addr;
+    assign of_rs1_rdata   = rf_rs1_rdata;
+    assign of_rs2_rdata   = rf_rs2_rdata;
+    assign of_rd_addr     = rf_rd_addr;
+    assign of_rd_wdata    = rf_rd_wdata;
 `endif
 endmodule
 
