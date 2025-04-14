@@ -183,60 +183,60 @@ module warp_issue (
     wire bundle1_pipe_xdiv   = bundle1_pipeline == `PIPELINE_XDIV;
 
     // switch xarith control signals based on port usage
-    wire [63:0] xarith_imm    = bundle0_pipe_xarith ? bundle0_imm         : bundle1_imm;
-    wire [ 1:0] xarith_opsel  = bundle0_pipe_xarith ? bundle0_xarith[1:0] : bundle1_xarith[1:0];
-    wire xarith_sub           = bundle0_pipe_xarith ? bundle0_xarith[2]   : bundle1_xarith[2];
-    wire xarith_unsigned      = bundle0_pipe_xarith ? bundle0_xarith[3]   : bundle1_xarith[3];
-    wire xarith_cmp_mode      = bundle0_pipe_xarith ? bundle0_xarith[4]   : bundle1_xarith[4];
-    wire xarith_branch_equal  = bundle0_pipe_xarith ? bundle0_xarith[5]   : bundle1_xarith[5];
-    wire xarith_branch_invert = bundle0_pipe_xarith ? bundle0_xarith[6]   : bundle1_xarith[6];
-    wire xarith_word          = bundle0_pipe_xarith ? bundle0_xarith[7]   : bundle1_xarith[7];
-    wire xarith_op2_sel       = bundle0_pipe_xarith ? bundle0_shared[0]   : bundle1_shared[0];
-    wire [ 4:0] xarith_rd     = bundle0_pipe_xarith ? bundle0_rd          : bundle1_rd;
+    wire [63:0] xarith_imm    = bundle0_dispatch_xarith ? bundle0_imm         : bundle1_imm;
+    wire [ 1:0] xarith_opsel  = bundle0_dispatch_xarith ? bundle0_xarith[1:0] : bundle1_xarith[1:0];
+    wire xarith_sub           = bundle0_dispatch_xarith ? bundle0_xarith[2]   : bundle1_xarith[2];
+    wire xarith_unsigned      = bundle0_dispatch_xarith ? bundle0_xarith[3]   : bundle1_xarith[3];
+    wire xarith_cmp_mode      = bundle0_dispatch_xarith ? bundle0_xarith[4]   : bundle1_xarith[4];
+    wire xarith_branch_equal  = bundle0_dispatch_xarith ? bundle0_xarith[5]   : bundle1_xarith[5];
+    wire xarith_branch_invert = bundle0_dispatch_xarith ? bundle0_xarith[6]   : bundle1_xarith[6];
+    wire xarith_word          = bundle0_dispatch_xarith ? bundle0_xarith[7]   : bundle1_xarith[7];
+    wire xarith_op2_sel       = bundle0_dispatch_xarith ? bundle0_shared[0]   : bundle1_shared[0];
+    wire [ 4:0] xarith_rd     = bundle0_dispatch_xarith ? bundle0_rd          : bundle1_rd;
 `ifdef RISCV_FORMAL
     wire        f_valid_xarith;
-    wire [63:0] f_order_xarith     = bundle0_pipe_xarith ? if_order_ch0     : if_order_ch1;
-    wire [31:0] f_insn_xarith      = bundle0_pipe_xarith ? if_insn_ch0      : if_insn_ch1;
-    wire        f_trap_xarith      = bundle0_pipe_xarith ? if_trap_ch0      : if_trap_ch1;
-    wire        f_halt_xarith      = bundle0_pipe_xarith ? if_halt_ch0      : if_halt_ch1;
-    wire        f_intr_xarith      = bundle0_pipe_xarith ? if_intr_ch0      : if_intr_ch1;
-    wire [ 1:0] f_mode_xarith      = bundle0_pipe_xarith ? if_mode_ch0      : if_mode_ch1;
-    wire [ 1:0] f_ixl_xarith       = bundle0_pipe_xarith ? if_ixl_ch0       : if_ixl_ch1;
-    wire [63:0] f_pc_rdata_xarith  = bundle0_pipe_xarith ? if_pc_rdata_ch0  : if_pc_rdata_ch1;
-    wire [63:0] f_pc_wdata_xarith  = bundle0_pipe_xarith ? if_pc_wdata_ch0  : if_pc_wdata_ch1;
-    wire [ 4:0] f_rs1_addr_xarith  = bundle0_pipe_xarith ? if_rs1_addr_ch0  : if_rs1_addr_ch1;
-    wire [ 4:0] f_rs2_addr_xarith  = bundle0_pipe_xarith ? if_rs2_addr_ch0  : if_rs2_addr_ch1;
-    wire [63:0] f_rs1_rdata_xarith = bundle0_pipe_xarith ? if_rs1_rdata_ch0 : if_rs1_rdata_ch1;
-    wire [63:0] f_rs2_rdata_xarith = bundle0_pipe_xarith ? if_rs2_rdata_ch0 : if_rs2_rdata_ch1;
-    wire [ 4:0] f_rd_addr_xarith   = bundle0_pipe_xarith ? if_rd_addr_ch0   : if_rd_addr_ch1;
-    wire [63:0] f_rd_wdata_xarith  = bundle0_pipe_xarith ? if_rd_wdata_ch0  : if_rd_wdata_ch1;
+    wire [63:0] f_order_xarith     = bundle0_dispatch_xarith ? if_order_ch0     : if_order_ch1;
+    wire [31:0] f_insn_xarith      = bundle0_dispatch_xarith ? if_insn_ch0      : if_insn_ch1;
+    wire        f_trap_xarith      = bundle0_dispatch_xarith ? if_trap_ch0      : if_trap_ch1;
+    wire        f_halt_xarith      = bundle0_dispatch_xarith ? if_halt_ch0      : if_halt_ch1;
+    wire        f_intr_xarith      = bundle0_dispatch_xarith ? if_intr_ch0      : if_intr_ch1;
+    wire [ 1:0] f_mode_xarith      = bundle0_dispatch_xarith ? if_mode_ch0      : if_mode_ch1;
+    wire [ 1:0] f_ixl_xarith       = bundle0_dispatch_xarith ? if_ixl_ch0       : if_ixl_ch1;
+    wire [63:0] f_pc_rdata_xarith  = bundle0_dispatch_xarith ? if_pc_rdata_ch0  : if_pc_rdata_ch1;
+    wire [63:0] f_pc_wdata_xarith  = bundle0_dispatch_xarith ? if_pc_wdata_ch0  : if_pc_wdata_ch1;
+    wire [ 4:0] f_rs1_addr_xarith  = bundle0_dispatch_xarith ? if_rs1_addr_ch0  : if_rs1_addr_ch1;
+    wire [ 4:0] f_rs2_addr_xarith  = bundle0_dispatch_xarith ? if_rs2_addr_ch0  : if_rs2_addr_ch1;
+    wire [63:0] f_rs1_rdata_xarith = bundle0_dispatch_xarith ? if_rs1_rdata_ch0 : if_rs1_rdata_ch1;
+    wire [63:0] f_rs2_rdata_xarith = bundle0_dispatch_xarith ? if_rs2_rdata_ch0 : if_rs2_rdata_ch1;
+    wire [ 4:0] f_rd_addr_xarith   = bundle0_dispatch_xarith ? if_rd_addr_ch0   : if_rd_addr_ch1;
+    wire [63:0] f_rd_wdata_xarith  = bundle0_dispatch_xarith ? if_rd_wdata_ch0  : if_rd_wdata_ch1;
 `endif
 
     // switch xlogic control signals based on port usage
-    wire [63:0] xlogic_imm   = bundle0_pipe_xlogic ? bundle0_imm         : bundle1_imm;
-    wire [ 2:0] xlogic_opsel = bundle0_pipe_xlogic ? bundle0_xlogic[2:0] : bundle1_xlogic[2:0];
-    wire xlogic_invert       = bundle0_pipe_xlogic ? bundle0_xlogic[3]   : bundle1_xlogic[3];
-    wire xlogic_sll          = bundle0_pipe_xlogic ? bundle0_xlogic[5:4] : bundle1_xlogic[5:4];
-    wire xlogic_word         = bundle0_pipe_xlogic ? bundle0_xlogic[6]   : bundle1_xlogic[6];
-    wire xlogic_op2_sel      = bundle0_pipe_xlogic ? bundle0_shared[0]   : bundle1_shared[0];
-    wire [ 4:0] xlogic_rd    = bundle0_pipe_xlogic ? bundle0_rd          : bundle1_rd;
+    wire [63:0] xlogic_imm   = bundle0_dispatch_xlogic ? bundle0_imm         : bundle1_imm;
+    wire [ 2:0] xlogic_opsel = bundle0_dispatch_xlogic ? bundle0_xlogic[2:0] : bundle1_xlogic[2:0];
+    wire xlogic_invert       = bundle0_dispatch_xlogic ? bundle0_xlogic[3]   : bundle1_xlogic[3];
+    wire xlogic_sll          = bundle0_dispatch_xlogic ? bundle0_xlogic[5:4] : bundle1_xlogic[5:4];
+    wire xlogic_word         = bundle0_dispatch_xlogic ? bundle0_xlogic[6]   : bundle1_xlogic[6];
+    wire xlogic_op2_sel      = bundle0_dispatch_xlogic ? bundle0_shared[0]   : bundle1_shared[0];
+    wire [ 4:0] xlogic_rd    = bundle0_dispatch_xlogic ? bundle0_rd          : bundle1_rd;
 `ifdef RISCV_FORMAL
     wire        f_valid_xlogic;
-    wire [63:0] f_order_xlogic     = bundle0_pipe_xlogic ? if_order_ch0     : if_order_ch1;
-    wire [31:0] f_insn_xlogic      = bundle0_pipe_xlogic ? if_insn_ch0      : if_insn_ch1;
-    wire        f_trap_xlogic      = bundle0_pipe_xlogic ? if_trap_ch0      : if_trap_ch1;
-    wire        f_halt_xlogic      = bundle0_pipe_xlogic ? if_halt_ch0      : if_halt_ch1;
-    wire        f_intr_xlogic      = bundle0_pipe_xlogic ? if_intr_ch0      : if_intr_ch1;
-    wire [ 1:0] f_mode_xlogic      = bundle0_pipe_xlogic ? if_mode_ch0      : if_mode_ch1;
-    wire [ 1:0] f_ixl_xlogic       = bundle0_pipe_xlogic ? if_ixl_ch0       : if_ixl_ch1;
-    wire [63:0] f_pc_rdata_xlogic  = bundle0_pipe_xlogic ? if_pc_rdata_ch0  : if_pc_rdata_ch1;
-    wire [63:0] f_pc_wdata_xlogic  = bundle0_pipe_xlogic ? if_pc_wdata_ch0  : if_pc_wdata_ch1;
-    wire [ 4:0] f_rs1_addr_xlogic  = bundle0_pipe_xlogic ? if_rs1_addr_ch0  : if_rs1_addr_ch1;
-    wire [ 4:0] f_rs2_addr_xlogic  = bundle0_pipe_xlogic ? if_rs2_addr_ch0  : if_rs2_addr_ch1;
-    wire [63:0] f_rs1_rdata_xlogic = bundle0_pipe_xlogic ? if_rs1_rdata_ch0 : if_rs1_rdata_ch1;
-    wire [63:0] f_rs2_rdata_xlogic = bundle0_pipe_xlogic ? if_rs2_rdata_ch0 : if_rs2_rdata_ch1;
-    wire [ 4:0] f_rd_addr_xlogic   = bundle0_pipe_xlogic ? if_rd_addr_ch0   : if_rd_addr_ch1;
-    wire [63:0] f_rd_wdata_xlogic  = bundle0_pipe_xlogic ? if_rd_wdata_ch0  : if_rd_wdata_ch1;
+    wire [63:0] f_order_xlogic     = bundle0_dispatch_xlogic ? if_order_ch0     : if_order_ch1;
+    wire [31:0] f_insn_xlogic      = bundle0_dispatch_xlogic ? if_insn_ch0      : if_insn_ch1;
+    wire        f_trap_xlogic      = bundle0_dispatch_xlogic ? if_trap_ch0      : if_trap_ch1;
+    wire        f_halt_xlogic      = bundle0_dispatch_xlogic ? if_halt_ch0      : if_halt_ch1;
+    wire        f_intr_xlogic      = bundle0_dispatch_xlogic ? if_intr_ch0      : if_intr_ch1;
+    wire [ 1:0] f_mode_xlogic      = bundle0_dispatch_xlogic ? if_mode_ch0      : if_mode_ch1;
+    wire [ 1:0] f_ixl_xlogic       = bundle0_dispatch_xlogic ? if_ixl_ch0       : if_ixl_ch1;
+    wire [63:0] f_pc_rdata_xlogic  = bundle0_dispatch_xlogic ? if_pc_rdata_ch0  : if_pc_rdata_ch1;
+    wire [63:0] f_pc_wdata_xlogic  = bundle0_dispatch_xlogic ? if_pc_wdata_ch0  : if_pc_wdata_ch1;
+    wire [ 4:0] f_rs1_addr_xlogic  = bundle0_dispatch_xlogic ? if_rs1_addr_ch0  : if_rs1_addr_ch1;
+    wire [ 4:0] f_rs2_addr_xlogic  = bundle0_dispatch_xlogic ? if_rs2_addr_ch0  : if_rs2_addr_ch1;
+    wire [63:0] f_rs1_rdata_xlogic = bundle0_dispatch_xlogic ? if_rs1_rdata_ch0 : if_rs1_rdata_ch1;
+    wire [63:0] f_rs2_rdata_xlogic = bundle0_dispatch_xlogic ? if_rs2_rdata_ch0 : if_rs2_rdata_ch1;
+    wire [ 4:0] f_rd_addr_xlogic   = bundle0_dispatch_xlogic ? if_rd_addr_ch0   : if_rd_addr_ch1;
+    wire [63:0] f_rd_wdata_xlogic  = bundle0_dispatch_xlogic ? if_rd_wdata_ch0  : if_rd_wdata_ch1;
 `endif
 
     // pull out the op2 select signal from the bundle for use in reservation
@@ -276,11 +276,13 @@ module warp_issue (
     wire bundle0_ready = i_input_valid && ((reservation & bundle0_mask) == 32'h0);
     wire bundle1_ready = i_input_valid && ((reservation & bundle1_mask) == 32'h0) && (bundle0_ready || bundle0_done) && !bundle1_waw;
 
-    wire bundle0_dispatch_xarith = bundle0_pipe_xarith && bundle0_ready;
-    wire bundle0_dispatch_xlogic = bundle0_pipe_xlogic && bundle0_ready;
-    wire bundle0_dispatch_xmultl = bundle0_pipe_xmultl && bundle0_ready;
-    wire bundle0_dispatch_xmulth = bundle0_pipe_xmulth && bundle0_ready;
-    wire bundle0_dispatch_xdiv   = bundle0_pipe_xdiv   && bundle0_ready;
+    // TODO: a state machine representation of this would be less bug prone
+    // but for now it has been verified formally
+    wire bundle0_dispatch_xarith = bundle0_pipe_xarith && bundle0_ready && !bundle0_done;
+    wire bundle0_dispatch_xlogic = bundle0_pipe_xlogic && bundle0_ready && !bundle0_done;
+    wire bundle0_dispatch_xmultl = bundle0_pipe_xmultl && bundle0_ready && !bundle0_done;
+    wire bundle0_dispatch_xmulth = bundle0_pipe_xmulth && bundle0_ready && !bundle0_done;
+    wire bundle0_dispatch_xdiv   = bundle0_pipe_xdiv   && bundle0_ready && !bundle0_done;
 
     wire bundle1_dispatch_xarith = (!bundle0_pipe_xarith || bundle0_done) && bundle1_pipe_xarith && bundle1_ready;
     wire bundle1_dispatch_xlogic = (!bundle0_pipe_xlogic || bundle0_done) && bundle1_pipe_xlogic && bundle1_ready;
@@ -290,8 +292,6 @@ module warp_issue (
 
     wire xarith_valid = bundle0_dispatch_xarith || bundle1_dispatch_xarith;
     wire xlogic_valid = bundle0_dispatch_xlogic || bundle1_dispatch_xlogic;
-    assign f_valid_xarith = xarith_valid;
-    assign f_valid_xlogic = xlogic_valid;
 
     // FIXME: what happens when we only dispatch one instruction? need to hold
     // state
@@ -318,6 +318,9 @@ module warp_issue (
             bundle1_pipe_xdiv  : bundle1_transmit = bundle1_dispatch_xdiv   && i_xdiv_ready;
         endcase
     end
+
+    assign f_valid_xarith = (if_valid_ch0 && bundle0_dispatch_xarith && bundle0_transmit) || (if_valid_ch1 && bundle1_dispatch_xarith && bundle1_transmit);
+    assign f_valid_xlogic = (if_valid_ch0 && bundle0_dispatch_xlogic && bundle0_transmit) || (if_valid_ch1 && bundle1_dispatch_xlogic && bundle1_transmit);
 
     // when the first instruction is dispatched but the second isn't, the
     // issue unit stalls. however, to avoid re-dispatching the first
@@ -527,10 +530,10 @@ module warp_issue (
     // assign o_rs2_addr    = r_rs2_addr;
     // assign o_rs3_addr    = r_rs3_addr;
     // assign o_rs4_addr    = r_rs4_addr;
-    assign o_rs1_addr    = rs1_addr;
-    assign o_rs2_addr    = rs2_addr;
-    assign o_rs3_addr    = rs3_addr;
-    assign o_rs4_addr    = rs4_addr;
+    assign o_rs1_addr    = bundle0_rs1;
+    assign o_rs2_addr    = bundle0_rs2;
+    assign o_rs3_addr    = bundle1_rs1;
+    assign o_rs4_addr    = bundle1_rs2;
 
     assign o_xarith_banksel       = r_xarith_banksel;
     assign o_xarith_op2_sel       = r_xarith_op2_sel;

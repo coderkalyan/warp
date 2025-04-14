@@ -327,10 +327,18 @@ module warp_hart #(
         .i_rd2_wdata(rd2_wdata)
     );
 
+    reg r_xarith_banksel;
+    always @(posedge i_clk, negedge i_rst_n) begin
+        if (!i_rst_n)
+            r_xarith_banksel <= 1'b0;
+        else
+            r_xarith_banksel <= xarith_banksel;
+    end
+
     // FIXME: this isn't true due to backpressure from the register file
     assign xarith_ready = 1'b1;
-    wire [63:0] xarith_rs1 = xarith_banksel ? rs1_rdata : rs3_rdata;
-    wire [63:0] xarith_rs2 = xarith_banksel ? rs2_rdata : rs4_rdata;
+    wire [63:0] xarith_rs1 = r_xarith_banksel ? rs3_rdata : rs1_rdata;
+    wire [63:0] xarith_rs2 = r_xarith_banksel ? rs4_rdata : rs2_rdata;
     wire [63:0] xarith_op1 = xarith_rs1;
     wire [63:0] xarith_op2 = xarith_op2_sel ? xarith_imm : xarith_rs2;
     wire [63:0] xarith_result;

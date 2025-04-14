@@ -496,37 +496,37 @@ module warp_xrf (
         end else begin
             // implement bypassing for all read ports, assumes
             // rd1 != rd2
-            if (i_rd1_wen && (i_rs1_addr == i_rd1_addr))
+            if (i_rd1_wen && (i_rs1_addr == i_rd1_addr) && (i_rd1_addr != 5'd0))
                 rs1_rdata <= i_rd1_wdata;
-            else if (i_rd2_wen && (i_rs1_addr == i_rd2_addr))
+            else if (i_rd2_wen && (i_rs1_addr == i_rd2_addr) && (i_rd2_addr != 5'd0))
                 rs1_rdata <= i_rd2_wdata;
             else
                 rs1_rdata <= file[i_rs1_addr];
 
-            if (i_rd1_wen && (i_rs2_addr == i_rd1_addr))
+            if (i_rd1_wen && (i_rs2_addr == i_rd1_addr) && (i_rd1_addr != 5'd0))
                 rs2_rdata <= i_rd1_wdata;
-            else if (i_rd2_wen && (i_rs2_addr == i_rd2_addr))
+            else if (i_rd2_wen && (i_rs2_addr == i_rd2_addr) && (i_rd2_addr != 5'd0))
                 rs2_rdata <= i_rd2_wdata;
             else
                 rs2_rdata <= file[i_rs2_addr];
 
-            if (i_rd1_wen && (i_rs3_addr == i_rd1_addr))
+            if (i_rd1_wen && (i_rs3_addr == i_rd1_addr) && (i_rd1_addr != 5'd0))
                 rs3_rdata <= i_rd1_wdata;
-            else if (i_rd2_wen && (i_rs3_addr == i_rd2_addr))
+            else if (i_rd2_wen && (i_rs3_addr == i_rd2_addr) && (i_rd2_addr != 5'd0))
                 rs3_rdata <= i_rd2_wdata;
             else
                 rs3_rdata <= file[i_rs3_addr];
 
-            if (i_rd1_wen && (i_rs4_addr == i_rd1_addr))
+            if (i_rd1_wen && (i_rs4_addr == i_rd1_addr) && (i_rd1_addr != 5'd0))
                 rs4_rdata <= i_rd1_wdata;
-            else if (i_rd2_wen && (i_rs4_addr == i_rd2_addr))
+            else if (i_rd2_wen && (i_rs4_addr == i_rd2_addr) && (i_rd2_addr != 5'd0))
                 rs4_rdata <= i_rd2_wdata;
             else
                 rs4_rdata <= file[i_rs4_addr];
 
-            if (i_rd1_wen)
+            if (i_rd1_wen && (i_rd1_addr != 5'd0))
                 file[i_rd1_addr] <= i_rd1_wdata;
-            if (i_rd2_wen)
+            if (i_rd2_wen && (i_rd2_addr != 5'd0))
                 file[i_rd2_addr] <= i_rd2_wdata;
         end
     end
