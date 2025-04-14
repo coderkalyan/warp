@@ -126,17 +126,17 @@ module warp_issue (
     wire [14:0] bundle0_raddr    = i_bundle0[15: 1];
     wire [31:0] bundle0_imm32    = i_bundle0[47:16];
     wire [ 3:0] bundle0_pipeline = i_bundle0[51:48];
-    wire [ 0:0] bundle0_shared   = i_bundle0[52:52];
-    wire [ 7:0] bundle0_xarith   = i_bundle0[60:53];
-    wire [ 6:0] bundle0_xlogic   = i_bundle0[67:61];
+    wire [ 1:0] bundle0_shared   = i_bundle0[53:52];
+    wire [ 7:0] bundle0_xarith   = i_bundle0[61:54];
+    wire [ 6:0] bundle0_xlogic   = i_bundle0[68:62];
 
     wire        bundle1_legal    = i_bundle1[ 0: 0];
     wire [14:0] bundle1_raddr    = i_bundle1[15: 1];
     wire [31:0] bundle1_imm32    = i_bundle1[47:16];
     wire [ 3:0] bundle1_pipeline = i_bundle1[51:48];
-    wire [ 0:0] bundle1_shared   = i_bundle1[52:52];
-    wire [ 7:0] bundle1_xarith   = i_bundle1[60:53];
-    wire [ 6:0] bundle1_xlogic   = i_bundle1[67:61];
+    wire [ 1:0] bundle1_shared   = i_bundle1[53:52];
+    wire [ 7:0] bundle1_xarith   = i_bundle1[61:54];
+    wire [ 6:0] bundle1_xlogic   = i_bundle1[68:62];
 
     // immediates are at most 32 bits in the instruction (actually less),
     // so sign extend them here to 64 bits
@@ -191,7 +191,7 @@ module warp_issue (
     wire xarith_branch_equal  = bundle0_dispatch_xarith ? bundle0_xarith[5]   : bundle1_xarith[5];
     wire xarith_branch_invert = bundle0_dispatch_xarith ? bundle0_xarith[6]   : bundle1_xarith[6];
     wire xarith_word          = bundle0_dispatch_xarith ? bundle0_xarith[7]   : bundle1_xarith[7];
-    wire xarith_op2_sel       = bundle0_dispatch_xarith ? bundle0_shared[0]   : bundle1_shared[0];
+    wire xarith_op2_sel       = bundle0_dispatch_xarith ? bundle0_shared[1]   : bundle1_shared[1];
     wire [ 4:0] xarith_rd     = bundle0_dispatch_xarith ? bundle0_rd          : bundle1_rd;
 `ifdef RISCV_FORMAL
     wire        f_valid_xarith;
@@ -218,7 +218,7 @@ module warp_issue (
     wire xlogic_invert       = bundle0_dispatch_xlogic ? bundle0_xlogic[3]   : bundle1_xlogic[3];
     wire xlogic_sll          = bundle0_dispatch_xlogic ? bundle0_xlogic[5:4] : bundle1_xlogic[5:4];
     wire xlogic_word         = bundle0_dispatch_xlogic ? bundle0_xlogic[6]   : bundle1_xlogic[6];
-    wire xlogic_op2_sel      = bundle0_dispatch_xlogic ? bundle0_shared[0]   : bundle1_shared[0];
+    wire xlogic_op2_sel      = bundle0_dispatch_xlogic ? bundle0_shared[1]   : bundle1_shared[1];
     wire [ 4:0] xlogic_rd    = bundle0_dispatch_xlogic ? bundle0_rd          : bundle1_rd;
 `ifdef RISCV_FORMAL
     wire        f_valid_xlogic;

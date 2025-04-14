@@ -514,100 +514,100 @@ module warp_hart #(
     // implemented
 `ifdef RISCV_FORMAL
     // Helper wire to track if channel 0 is using the arithmetic unit
-    wire f_ch0_arith = f_xarith_valid && (!f_xlogic_valid || 1'b1); // arith has priority
-    wire f_ch0_logic = f_xlogic_valid && !f_xarith_valid;           // logic only gets ch0 if arith not valid
-
-    // retire channel 0 (highest priority valid instruction)
-    assign rvfi_valid[0]        = f_xarith_valid || f_xlogic_valid;
-    assign rvfi_order[63:0]     = f_ch0_arith ? f_xarith_order : f_xlogic_order;
-    assign rvfi_insn[31:0]      = f_ch0_arith ? f_xarith_insn : f_xlogic_insn;
-    assign rvfi_trap[0]         = f_ch0_arith ? f_xarith_trap : f_xlogic_trap;
-    assign rvfi_halt[0]         = f_ch0_arith ? f_xarith_halt : f_xlogic_halt;
-    assign rvfi_intr[0]         = f_ch0_arith ? f_xarith_intr : f_xlogic_intr;
-    assign rvfi_mode[1:0]       = f_ch0_arith ? f_xarith_mode : f_xlogic_mode;
-    assign rvfi_ixl[1:0]        = f_ch0_arith ? f_xarith_ixl : f_xlogic_ixl;
-    assign rvfi_rs1_addr[4:0]   = f_ch0_arith ? f_xarith_rs1_addr : f_xlogic_rs1_addr;
-    assign rvfi_rs2_addr[4:0]   = f_ch0_arith ? f_xarith_rs2_addr : f_xlogic_rs2_addr;
-    assign rvfi_rs1_rdata[63:0] = f_ch0_arith ? f_xarith_rs1_rdata : f_xlogic_rs1_rdata;
-    assign rvfi_rs2_rdata[63:0] = f_ch0_arith ? f_xarith_rs2_rdata : f_xlogic_rs2_rdata;
-    assign rvfi_rd_addr[4:0]    = f_ch0_arith ? f_xarith_rd_addr : f_xlogic_rd_addr;
-    assign rvfi_rd_wdata[63:0]  = f_ch0_arith ? f_xarith_rd_wdata : f_xlogic_rd_wdata;
-    assign rvfi_pc_rdata[63:0]  = f_ch0_arith ? f_xarith_pc_rdata : f_xlogic_pc_rdata;
-    assign rvfi_pc_wdata[63:0]  = f_ch0_arith ? f_xarith_pc_wdata : f_xlogic_pc_wdata;
-    assign rvfi_mem_addr[63:0]  = 0;
-    assign rvfi_mem_rmask[7:0]  = 0;
-    assign rvfi_mem_rdata[63:0] = 0;
-    assign rvfi_mem_wmask[7:0]  = 0;
-    assign rvfi_mem_wdata[63:0] = 0;
-
-    // retire channel 1 (second valid instruction if it exists)
-    // Only retire on channel 1 if both are valid, and channel 0 took the other one
-    assign rvfi_valid[1]          = f_xarith_valid && f_xlogic_valid;
-    assign rvfi_order[127:64]     = f_ch0_arith ? f_xlogic_order : f_xarith_order;
-    assign rvfi_insn[63:32]       = f_ch0_arith ? f_xlogic_insn : f_xarith_insn;
-    assign rvfi_trap[1]           = f_ch0_arith ? f_xlogic_trap : f_xarith_trap;
-    assign rvfi_halt[1]           = f_ch0_arith ? f_xlogic_halt : f_xarith_halt;
-    assign rvfi_intr[1]           = f_ch0_arith ? f_xlogic_intr : f_xarith_intr;
-    assign rvfi_mode[3:2]         = f_ch0_arith ? f_xlogic_mode : f_xarith_mode;
-    assign rvfi_ixl[3:2]          = f_ch0_arith ? f_xlogic_ixl : f_xarith_ixl;
-    assign rvfi_rs1_addr[9:5]     = f_ch0_arith ? f_xlogic_rs1_addr : f_xarith_rs1_addr;
-    assign rvfi_rs2_addr[9:5]     = f_ch0_arith ? f_xlogic_rs2_addr : f_xarith_rs2_addr;
-    assign rvfi_rs1_rdata[127:64] = f_ch0_arith ? f_xlogic_rs1_rdata : f_xarith_rs1_rdata;
-    assign rvfi_rs2_rdata[127:64] = f_ch0_arith ? f_xlogic_rs2_rdata : f_xarith_rs2_rdata;
-    assign rvfi_rd_addr[9:5]      = f_ch0_arith ? f_xlogic_rd_addr : f_xarith_rd_addr;
-    assign rvfi_rd_wdata[127:64]  = f_ch0_arith ? f_xlogic_rd_wdata : f_xarith_rd_wdata;
-    assign rvfi_pc_rdata[127:64]  = f_ch0_arith ? f_xlogic_pc_rdata : f_xarith_pc_rdata;
-    assign rvfi_pc_wdata[127:64]  = f_ch0_arith ? f_xlogic_pc_wdata : f_xarith_pc_wdata;
-    assign rvfi_mem_addr[127:64]  = 0;
-    assign rvfi_mem_rmask[15:8]   = 0;
-    assign rvfi_mem_rdata[127:64] = 0;
-    assign rvfi_mem_wmask[15:8]   = 0;
-    assign rvfi_mem_wdata[127:64] = 0;
-    // // retire channel 0
-    // assign rvfi_valid[0]        = f_xarith_valid;
-    // assign rvfi_order[63:0]     = f_xarith_order;
-    // assign rvfi_insn[31:0]      = f_xarith_insn;
-    // assign rvfi_trap[0]         = f_xarith_trap;
-    // assign rvfi_halt[0]         = f_xarith_halt;
-    // assign rvfi_intr[0]         = f_xarith_intr;
-    // assign rvfi_mode[1:0]       = f_xarith_mode;
-    // assign rvfi_ixl[1:0]        = f_xarith_ixl;
-    // assign rvfi_rs1_addr[4:0]   = f_xarith_rs1_addr;
-    // assign rvfi_rs2_addr[4:0]   = f_xarith_rs2_addr;
-    // assign rvfi_rs1_rdata[63:0] = f_xarith_rs1_rdata;
-    // assign rvfi_rs2_rdata[63:0] = f_xarith_rs2_rdata;
-    // assign rvfi_rd_addr[4:0]    = f_xarith_rd_addr;
-    // assign rvfi_rd_wdata[63:0]  = f_xarith_rd_wdata;
-    // assign rvfi_pc_rdata[63:0]  = f_xarith_pc_rdata;
-    // assign rvfi_pc_wdata[63:0]  = f_xarith_pc_wdata;
+    // wire f_ch0_arith = f_xarith_valid && (!f_xlogic_valid || 1'b1); // arith has priority
+    // wire f_ch0_logic = f_xlogic_valid && !f_xarith_valid;           // logic only gets ch0 if arith not valid
+    //
+    // // retire channel 0 (highest priority valid instruction)
+    // assign rvfi_valid[0]        = f_xarith_valid || f_xlogic_valid;
+    // assign rvfi_order[63:0]     = f_ch0_arith ? f_xarith_order : f_xlogic_order;
+    // assign rvfi_insn[31:0]      = f_ch0_arith ? f_xarith_insn : f_xlogic_insn;
+    // assign rvfi_trap[0]         = f_ch0_arith ? f_xarith_trap : f_xlogic_trap;
+    // assign rvfi_halt[0]         = f_ch0_arith ? f_xarith_halt : f_xlogic_halt;
+    // assign rvfi_intr[0]         = f_ch0_arith ? f_xarith_intr : f_xlogic_intr;
+    // assign rvfi_mode[1:0]       = f_ch0_arith ? f_xarith_mode : f_xlogic_mode;
+    // assign rvfi_ixl[1:0]        = f_ch0_arith ? f_xarith_ixl : f_xlogic_ixl;
+    // assign rvfi_rs1_addr[4:0]   = f_ch0_arith ? f_xarith_rs1_addr : f_xlogic_rs1_addr;
+    // assign rvfi_rs2_addr[4:0]   = f_ch0_arith ? f_xarith_rs2_addr : f_xlogic_rs2_addr;
+    // assign rvfi_rs1_rdata[63:0] = f_ch0_arith ? f_xarith_rs1_rdata : f_xlogic_rs1_rdata;
+    // assign rvfi_rs2_rdata[63:0] = f_ch0_arith ? f_xarith_rs2_rdata : f_xlogic_rs2_rdata;
+    // assign rvfi_rd_addr[4:0]    = f_ch0_arith ? f_xarith_rd_addr : f_xlogic_rd_addr;
+    // assign rvfi_rd_wdata[63:0]  = f_ch0_arith ? f_xarith_rd_wdata : f_xlogic_rd_wdata;
+    // assign rvfi_pc_rdata[63:0]  = f_ch0_arith ? f_xarith_pc_rdata : f_xlogic_pc_rdata;
+    // assign rvfi_pc_wdata[63:0]  = f_ch0_arith ? f_xarith_pc_wdata : f_xlogic_pc_wdata;
     // assign rvfi_mem_addr[63:0]  = 0;
     // assign rvfi_mem_rmask[7:0]  = 0;
     // assign rvfi_mem_rdata[63:0] = 0;
     // assign rvfi_mem_wmask[7:0]  = 0;
     // assign rvfi_mem_wdata[63:0] = 0;
     //
-    // // retire channel 1
-    // assign rvfi_valid[1]          = f_xlogic_valid;
-    // assign rvfi_order[127:64]     = f_xlogic_order;
-    // assign rvfi_insn[63:32]       = f_xlogic_insn;
-    // assign rvfi_trap[1]           = f_xlogic_trap;
-    // assign rvfi_halt[1]           = f_xlogic_halt;
-    // assign rvfi_intr[1]           = f_xlogic_intr;
-    // assign rvfi_mode[3:2]         = f_xlogic_mode;
-    // assign rvfi_ixl[3:2]          = f_xlogic_ixl;
-    // assign rvfi_rs1_addr[9:5]     = f_xlogic_rs1_addr;
-    // assign rvfi_rs2_addr[9:5]     = f_xlogic_rs2_addr;
-    // assign rvfi_rs1_rdata[127:64] = f_xlogic_rs1_rdata;
-    // assign rvfi_rs2_rdata[127:64] = f_xlogic_rs2_rdata;
-    // assign rvfi_rd_addr[9:5]      = f_xlogic_rd_addr;
-    // assign rvfi_rd_wdata[127:64]  = f_xlogic_rd_wdata;
-    // assign rvfi_pc_rdata[127:64]  = f_xlogic_pc_rdata;
-    // assign rvfi_pc_wdata[127:64]  = f_xlogic_pc_wdata;
+    // // retire channel 1 (second valid instruction if it exists)
+    // // Only retire on channel 1 if both are valid, and channel 0 took the other one
+    // assign rvfi_valid[1]          = f_xarith_valid && f_xlogic_valid;
+    // assign rvfi_order[127:64]     = f_ch0_arith ? f_xlogic_order : f_xarith_order;
+    // assign rvfi_insn[63:32]       = f_ch0_arith ? f_xlogic_insn : f_xarith_insn;
+    // assign rvfi_trap[1]           = f_ch0_arith ? f_xlogic_trap : f_xarith_trap;
+    // assign rvfi_halt[1]           = f_ch0_arith ? f_xlogic_halt : f_xarith_halt;
+    // assign rvfi_intr[1]           = f_ch0_arith ? f_xlogic_intr : f_xarith_intr;
+    // assign rvfi_mode[3:2]         = f_ch0_arith ? f_xlogic_mode : f_xarith_mode;
+    // assign rvfi_ixl[3:2]          = f_ch0_arith ? f_xlogic_ixl : f_xarith_ixl;
+    // assign rvfi_rs1_addr[9:5]     = f_ch0_arith ? f_xlogic_rs1_addr : f_xarith_rs1_addr;
+    // assign rvfi_rs2_addr[9:5]     = f_ch0_arith ? f_xlogic_rs2_addr : f_xarith_rs2_addr;
+    // assign rvfi_rs1_rdata[127:64] = f_ch0_arith ? f_xlogic_rs1_rdata : f_xarith_rs1_rdata;
+    // assign rvfi_rs2_rdata[127:64] = f_ch0_arith ? f_xlogic_rs2_rdata : f_xarith_rs2_rdata;
+    // assign rvfi_rd_addr[9:5]      = f_ch0_arith ? f_xlogic_rd_addr : f_xarith_rd_addr;
+    // assign rvfi_rd_wdata[127:64]  = f_ch0_arith ? f_xlogic_rd_wdata : f_xarith_rd_wdata;
+    // assign rvfi_pc_rdata[127:64]  = f_ch0_arith ? f_xlogic_pc_rdata : f_xarith_pc_rdata;
+    // assign rvfi_pc_wdata[127:64]  = f_ch0_arith ? f_xlogic_pc_wdata : f_xarith_pc_wdata;
     // assign rvfi_mem_addr[127:64]  = 0;
     // assign rvfi_mem_rmask[15:8]   = 0;
     // assign rvfi_mem_rdata[127:64] = 0;
     // assign rvfi_mem_wmask[15:8]   = 0;
     // assign rvfi_mem_wdata[127:64] = 0;
+    // retire channel 0
+    assign rvfi_valid[0]        = f_xarith_valid;
+    assign rvfi_order[63:0]     = f_xarith_order;
+    assign rvfi_insn[31:0]      = f_xarith_insn;
+    assign rvfi_trap[0]         = f_xarith_trap;
+    assign rvfi_halt[0]         = f_xarith_halt;
+    assign rvfi_intr[0]         = f_xarith_intr;
+    assign rvfi_mode[1:0]       = f_xarith_mode;
+    assign rvfi_ixl[1:0]        = f_xarith_ixl;
+    assign rvfi_rs1_addr[4:0]   = f_xarith_rs1_addr;
+    assign rvfi_rs2_addr[4:0]   = f_xarith_rs2_addr;
+    assign rvfi_rs1_rdata[63:0] = f_xarith_rs1_rdata;
+    assign rvfi_rs2_rdata[63:0] = f_xarith_rs2_rdata;
+    assign rvfi_rd_addr[4:0]    = f_xarith_rd_addr;
+    assign rvfi_rd_wdata[63:0]  = f_xarith_rd_wdata;
+    assign rvfi_pc_rdata[63:0]  = f_xarith_pc_rdata;
+    assign rvfi_pc_wdata[63:0]  = f_xarith_pc_wdata;
+    assign rvfi_mem_addr[63:0]  = 0;
+    assign rvfi_mem_rmask[7:0]  = 0;
+    assign rvfi_mem_rdata[63:0] = 0;
+    assign rvfi_mem_wmask[7:0]  = 0;
+    assign rvfi_mem_wdata[63:0] = 0;
+
+    // retire channel 1
+    assign rvfi_valid[1]          = f_xlogic_valid;
+    assign rvfi_order[127:64]     = f_xlogic_order;
+    assign rvfi_insn[63:32]       = f_xlogic_insn;
+    assign rvfi_trap[1]           = f_xlogic_trap;
+    assign rvfi_halt[1]           = f_xlogic_halt;
+    assign rvfi_intr[1]           = f_xlogic_intr;
+    assign rvfi_mode[3:2]         = f_xlogic_mode;
+    assign rvfi_ixl[3:2]          = f_xlogic_ixl;
+    assign rvfi_rs1_addr[9:5]     = f_xlogic_rs1_addr;
+    assign rvfi_rs2_addr[9:5]     = f_xlogic_rs2_addr;
+    assign rvfi_rs1_rdata[127:64] = f_xlogic_rs1_rdata;
+    assign rvfi_rs2_rdata[127:64] = f_xlogic_rs2_rdata;
+    assign rvfi_rd_addr[9:5]      = f_xlogic_rd_addr;
+    assign rvfi_rd_wdata[127:64]  = f_xlogic_rd_wdata;
+    assign rvfi_pc_rdata[127:64]  = f_xlogic_pc_rdata;
+    assign rvfi_pc_wdata[127:64]  = f_xlogic_pc_wdata;
+    assign rvfi_mem_addr[127:64]  = 0;
+    assign rvfi_mem_rmask[15:8]   = 0;
+    assign rvfi_mem_rdata[127:64] = 0;
+    assign rvfi_mem_wmask[15:8]   = 0;
+    assign rvfi_mem_wdata[127:64] = 0;
 `endif
 
     // TODO: wen can be merged with write_rd to 0

@@ -43,7 +43,7 @@ module warp_decode (
     wire [14:0] decode_raddr    [1:0];
     wire [31:0] decode_imm      [1:0]; // TODO: consider reducing imm size by doing signext later
     wire [3:0]  decode_pipeline [1:0];
-    wire [0:0]  decode_shared   [1:0];
+    wire [1:0]  decode_shared   [1:0];
     wire [7:0]  decode_xarith   [1:0];
     wire [6:0]  decode_xlogic   [1:0];
     wire [`BUNDLE_SIZE - 1:0] decode_bundle [1:0];
@@ -70,9 +70,9 @@ module warp_decode (
             assign decode_bundle[i][15: 1] = decode_raddr[i];
             assign decode_bundle[i][47:16] = decode_imm[i];
             assign decode_bundle[i][51:48] = decode_pipeline[i];
-            assign decode_bundle[i][52:52] = decode_shared[i];
-            assign decode_bundle[i][60:53] = decode_xarith[i];
-            assign decode_bundle[i][67:61] = decode_xlogic[i];
+            assign decode_bundle[i][53:52] = decode_shared[i];
+            assign decode_bundle[i][61:54] = decode_xarith[i];
+            assign decode_bundle[i][68:62] = decode_xlogic[i];
         end
     endgenerate
 
@@ -272,8 +272,9 @@ module warp_udecode (
     output wire [14:0] o_raddr,
     output wire [31:0] o_imm,
     output wire [3:0]  o_pipeline,
-    // [0]   = op2_sel
-    output wire [0:0]  o_shared,
+    // [0]   = op1_sel
+    // [1]   = op2_sel
+    output wire [1:0]  o_shared,
     // [1:0] = opsel
     // [2]   = sub
     // [3]   = unsigned
@@ -344,7 +345,8 @@ module warp_udecode (
     // backend pipeline selection
     reg [3:0] pipeline;
     // shared control signals
-    reg       op2_sel;
+    reg       rs1_clear;
+    reg       op1_sel, op2_sel;
     // xarith control signals
     reg [1:0] xarith_opsel;
     reg xarith_sub, xarith_unsigned, xarith_cmp_mode;
@@ -358,6 +360,8 @@ module warp_udecode (
         legal = 1'b0;
         // FIXME: some of these can be x once we debug everything
         pipeline = 4'b0000;
+        rs1_clear = 1'b0;
+        op1_sel = 1'b0;
         op2_sel = 1'b0;
         xarith_opsel = 2'b00;
         xarith_sub = 1'b0;
@@ -530,6 +534,7 @@ module warp_udecode (
             op_lui: begin
                 legal = 1'b1;
                 pipeline = `PIPELINE_XARITH;
+                rs1_clear = 1'b1;
                 op2_sel = 1'b1;
                 xarith_opsel = `XARITH_OP_ADD;
                 xarith_sub = 1'b0;
@@ -567,11 +572,12 @@ module warp_udecode (
     end
 
     assign o_legal    = legal;
-    assign o_raddr    = {rd, rs2, rs1};
+    assign o_raddr    = {rd, rs2, rs1 & {5{~rs1_clear}}};
     assign o_imm      = imm;
     assign o_pipeline = pipeline;
 
-    assign o_shared[0] = op2_sel;
+    assign o_shared[0]   = op1_sel;
+    assign o_shared[1]   = op2_sel;
 
     assign o_xarith[1:0] = xarith_opsel;
     assign o_xarith[2]   = xarith_sub;
