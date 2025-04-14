@@ -381,6 +381,7 @@ module warp_udecode (
                         pipeline = `PIPELINE_XARITH;
                         xarith_opsel = `XARITH_OP_ADD;
                         xarith_word = 1'b0;
+                        xarith_sub = 1'b0;
                     end
                     // slli
                     3'b001: begin
@@ -388,6 +389,7 @@ module warp_udecode (
                         pipeline = `PIPELINE_XLOGIC;
                         xlogic_opsel = `XLOGIC_OP_SHF;
                         xlogic_word = 1'b0;
+                        xarith_sub = 1'b0;
                     end
                     // slti, sltiu
                     3'b010, 3'b011: begin
@@ -395,6 +397,7 @@ module warp_udecode (
                         pipeline = `PIPELINE_XARITH;
                         xarith_opsel = `XARITH_OP_SLT;
                         xlogic_word = 1'b0;
+                        xarith_sub = 1'b1;
                     end
                     // xori
                     3'b100: begin
@@ -427,7 +430,6 @@ module warp_udecode (
                 endcase
 
                 op2_sel = 1'b1;
-                xarith_sub = 1'b0;
                 xarith_unsigned = funct3[0];
                 xlogic_invert = 1'b0;
             end
@@ -477,6 +479,7 @@ module warp_udecode (
                         legal = funct7 == 7'b0000000 || funct7 == 7'b0100000;
                         pipeline = `PIPELINE_XARITH;
                         xarith_opsel = `XARITH_OP_ADD;
+                        xarith_sub = funct7[5];
                     end
                     // sll
                     3'b001: begin
@@ -489,6 +492,7 @@ module warp_udecode (
                         legal = 1'b1;
                         pipeline = `PIPELINE_XARITH;
                         xarith_opsel = `XARITH_OP_SLT;
+                        xarith_sub = 1'b1;
                     end
                     // xor
                     3'b100: begin
@@ -517,7 +521,6 @@ module warp_udecode (
                 endcase
 
                 op2_sel = 1'b0;
-                xarith_sub = funct7[5];
                 xarith_word = 1'b0;
                 xarith_unsigned = funct3[0];
                 xlogic_invert = 1'b0;

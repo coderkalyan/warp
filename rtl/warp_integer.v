@@ -65,17 +65,15 @@ module warp_xarith (
     output wire [ 4:0] o_rd
 );
     // add/sub
-    wire [64:0] add_op1 = {i_op1[63], i_op1};
-    wire [64:0] add_op2 = {i_op2[63], i_op2} ^ {65{i_sub}};
+    wire [64:0] add_op1 = {i_op1[63] & ~i_unsigned, i_op1};
+    wire [64:0] add_op2 = {i_op2[63] & ~i_unsigned, i_op2} ^ {65{i_sub}};
     wire [64:0] sum = add_op1 + add_op2 + i_sub;
     wire [63:0] add_result;
     assign add_result[63:32] = i_word ? {32{sum[31]}} : sum[63:32];
     assign add_result[31:0]  = sum[31:0];
 
     // comparison
-    wire lt  = sum[63];
-    wire ltu = sum[64];
-    wire slt = i_unsigned ? ltu : lt;
+    wire slt = sum[64];
     wire [63:0] slt_result = {63'h0, slt};
 
     // min/max
@@ -339,7 +337,7 @@ module warp_xlogic (
             rf_rs1_rdata   <= if_rs1_rdata;
             rf_rs2_rdata   <= if_rs2_rdata;
             rf_rd_addr     <= if_rd_addr;
-            rf_rd_wdata    <= if_rd_wdata;
+            rf_rd_wdata    <= (if_rd_addr == 32'd0) ? 64'd0 : result;
         end
     end
 
