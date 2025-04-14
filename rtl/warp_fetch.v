@@ -88,14 +88,20 @@ module warp_fetch #(
     always @(*) begin
         advance_pc = 64'hx;
 
-        casez ({branch[0], compressed})
-            3'b000: advance_pc = pc + 64'h8;
-            3'b001,
-            3'b010: advance_pc = pc + 64'h6;
-            3'b011: advance_pc = pc + 64'h4;
-            3'b10?: advance_pc = pc + 64'h4;
-            3'b11?: advance_pc = pc + 64'h2;
-        endcase
+        // FIXME: why does riscv formal not like the compressed
+        // even when disabled for decoding
+        if (branch[0])
+            advance_pc = pc + 64'h4;
+        else
+            advance_pc = pc + 64'h8;
+        // casez ({branch[0], compressed})
+        //     3'b000: advance_pc = pc + 64'h8;
+        //     3'b001,
+        //     3'b010: advance_pc = pc + 64'h6;
+        //     3'b011: advance_pc = pc + 64'h4;
+        //     3'b10?: advance_pc = pc + 64'h4;
+        //     3'b11?: advance_pc = pc + 64'h2;
+        // endcase
     end
 
     // because the fetch stalls by requesting the same instruction
@@ -177,7 +183,9 @@ module warp_fetch #(
     assign of_intr_ch1  = 1'b0;
     assign of_mode_ch1  = 2'h3; // machine mode (M)
     assign of_ixl_ch1   = 2'h2; // 64 bits
-    assign of_pc_rdata_ch1 = compressed ? (pc + 64'h2) : (pc + 64'h4);
+    // FIXME: riscv formal doesn't like the compressed advance
+    // assign of_pc_rdata_ch1 = compressed ? (pc + 64'h2) : (pc + 64'h4);
+    assign of_pc_rdata_ch1 = pc + 64'h4;
     assign of_pc_wdata_ch1 = next_pc;
 `endif
 

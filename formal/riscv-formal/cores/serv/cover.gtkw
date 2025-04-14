@@ -1,0 +1,55 @@
+[*]
+[*] GTKWave Analyzer v3.3.89 (w)1999-2018 BSI
+[*] Thu Nov  1 11:25:45 2018
+[*]
+[timestart] 0
+[size] 1394 830
+[pos] -1 -1
+*-5.990967 5 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
+[treeopen] rvfi_testbench.
+[treeopen] rvfi_testbench.wrapper.
+[sst_width] 225
+[signals_width] 310
+[sst_expanded] 1
+[sst_vpaned_height] 241
+@24
+rvfi_testbench.cycle[7:0]
+@200
+-
+@28
+rvfi_testbench.wrapper.clock
+rvfi_testbench.wrapper.reset
+@200
+-
+-I-MEM
+@28
+rvfi_testbench.wrapper.ibus_cyc
+rvfi_testbench.wrapper.ibus_ack
+@22
+rvfi_testbench.wrapper.ibus_adr[31:0]
+rvfi_testbench.wrapper.ibus_rdt[31:0]
+@200
+-
+-D-MEM
+@28
+rvfi_testbench.wrapper.dbus_cyc
+rvfi_testbench.wrapper.dbus_ack
+rvfi_testbench.wrapper.dbus_we
+@22
+rvfi_testbench.wrapper.dbus_adr[31:0]
+rvfi_testbench.wrapper.dbus_dat[31:0]
+rvfi_testbench.wrapper.dbus_sel[3:0]
+rvfi_testbench.wrapper.dbus_rdt[31:0]
+@200
+-
+-RVFI
+@28
+rvfi_testbench.wrapper.rvfi_valid
+@22
+rvfi_testbench.wrapper.rvfi_insn[31:0]
+rvfi_testbench.wrapper.rvfi_pc_rdata[31:0]
+@200
+-
+-
+[pattern_trace] 1
+[pattern_trace] 0

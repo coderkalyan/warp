@@ -194,7 +194,7 @@ module warp_issue (
     wire xarith_op2_sel       = bundle0_pipe_xarith ? bundle0_shared[0]   : bundle1_shared[0];
     wire [ 4:0] xarith_rd     = bundle0_pipe_xarith ? bundle0_rd          : bundle1_rd;
 `ifdef RISCV_FORMAL
-    wire [63:0] f_valid_xarith;
+    wire        f_valid_xarith;
     wire [63:0] f_order_xarith     = bundle0_pipe_xarith ? if_order_ch0     : if_order_ch1;
     wire [31:0] f_insn_xarith      = bundle0_pipe_xarith ? if_insn_ch0      : if_insn_ch1;
     wire        f_trap_xarith      = bundle0_pipe_xarith ? if_trap_ch0      : if_trap_ch1;
@@ -364,7 +364,7 @@ module warp_issue (
     reg [ 4:0] r_xarith_rd;
     always @(posedge i_clk, negedge i_rst_n) begin
         if (!i_rst_n) begin
-            r_xarith_banksel       <= 1'b0;
+            // r_xarith_banksel       <= 1'b0;
             r_xarith_op2_sel       <= 1'b0;
             r_xarith_imm           <= 64'h0;
             r_xarith_opsel         <= 2'b00;
@@ -377,7 +377,7 @@ module warp_issue (
             r_xarith_valid         <= 1'b0;
             r_xarith_rd            <= 5'h0;
         end else begin
-            r_xarith_banksel       <= bundle1_pipe_xarith;
+            // r_xarith_banksel       <= bundle1_pipe_xarith;
             r_xarith_op2_sel       <= xarith_op2_sel;
             r_xarith_imm           <= xarith_imm;
             r_xarith_opsel         <= xarith_opsel;
@@ -393,7 +393,7 @@ module warp_issue (
     end
 
 `ifdef RISCV_FORMAL
-    reg         rf_xarith_valid, rf_xlogic_valid;
+    reg         rf_valid_xarith, rf_valid_xlogic;
     reg [63:0]  rf_order_xarith, rf_order_xlogic;
     reg [31:0]  rf_insn_xarith, rf_insn_xlogic;
     reg         rf_trap_xarith, rf_halt_xarith, rf_intr_xarith;
@@ -409,7 +409,7 @@ module warp_issue (
 
     always @(posedge i_clk, negedge i_rst_n) begin
         if (!i_rst_n) begin
-            rf_xarith_valid       <= 1'b0;
+            rf_valid_xarith       <= 1'b0;
             rf_order_xarith       <= 64'h0;
             rf_insn_xarith        <= 32'h0;
             rf_trap_xarith        <= 1'b0;
@@ -426,7 +426,7 @@ module warp_issue (
             rf_rd_addr_xarith     <= 5'h0;
             rf_rd_wdata_xarith    <= 64'h0;
         end else begin
-            rf_xarith_valid       <= f_valid_xarith;
+            rf_valid_xarith       <= f_valid_xarith;
             rf_order_xarith       <= f_order_xarith;
             rf_insn_xarith        <= f_insn_xarith;
             rf_trap_xarith        <= f_trap_xarith;
@@ -454,7 +454,7 @@ module warp_issue (
     reg [ 4:0] r_xlogic_rd;
     always @(posedge i_clk, negedge i_rst_n) begin
         if (!i_rst_n) begin
-            r_xlogic_banksel <= 1'b0;
+            // r_xlogic_banksel <= 1'b0;
             r_xlogic_op2_sel <= 1'b0;
             r_xlogic_imm     <= 64'h0;
             r_xlogic_opsel   <= 3'b000;
@@ -464,7 +464,7 @@ module warp_issue (
             r_xlogic_valid   <= 1'b0;
             r_xlogic_rd      <= 5'h0;
         end else begin
-            r_xlogic_banksel <= bundle1_pipe_xlogic;
+            // r_xlogic_banksel <= bundle1_pipe_xlogic;
             r_xlogic_op2_sel <= xlogic_op2_sel;
             r_xlogic_imm     <= xlogic_imm;
             r_xlogic_opsel   <= xlogic_opsel;
@@ -476,10 +476,16 @@ module warp_issue (
         end
     end
 
+    // FIXME: verify that this is correct
+    always @(*) begin
+        r_xarith_banksel = bundle1_dispatch_xarith;
+        r_xlogic_banksel = bundle1_dispatch_xlogic;
+    end
+
 `ifdef RISCV_FORMAL
     always @(posedge i_clk, negedge i_rst_n) begin
         if (!i_rst_n) begin
-            rf_xlogic_valid       <= 1'b0;
+            rf_valid_xlogic       <= 1'b0;
             rf_order_xlogic       <= 64'h0;
             rf_insn_xlogic        <= 32'h0;
             rf_trap_xlogic        <= 1'b0;
@@ -496,7 +502,7 @@ module warp_issue (
             rf_rd_addr_xlogic     <= 5'h0;
             rf_rd_wdata_xlogic    <= 64'h0;
         end else begin
-            rf_xlogic_valid       <= f_valid_xlogic;
+            rf_valid_xlogic       <= f_valid_xlogic;
             rf_order_xlogic       <= f_order_xlogic;
             rf_insn_xlogic        <= f_insn_xlogic;
             rf_trap_xlogic        <= f_trap_xlogic;
@@ -517,10 +523,14 @@ module warp_issue (
 `endif
 
     assign o_input_ready = input_ready;
-    assign o_rs1_addr    = r_rs1_addr;
-    assign o_rs2_addr    = r_rs2_addr;
-    assign o_rs3_addr    = r_rs3_addr;
-    assign o_rs4_addr    = r_rs4_addr;
+    // assign o_rs1_addr    = r_rs1_addr;
+    // assign o_rs2_addr    = r_rs2_addr;
+    // assign o_rs3_addr    = r_rs3_addr;
+    // assign o_rs4_addr    = r_rs4_addr;
+    assign o_rs1_addr    = rs1_addr;
+    assign o_rs2_addr    = rs2_addr;
+    assign o_rs3_addr    = rs3_addr;
+    assign o_rs4_addr    = rs4_addr;
 
     assign o_xarith_banksel       = r_xarith_banksel;
     assign o_xarith_op2_sel       = r_xarith_op2_sel;
@@ -546,7 +556,7 @@ module warp_issue (
     assign o_xlogic_valid   = r_xlogic_valid;
 
 `ifdef RISCV_FORMAL
-    assign of_valid_xarith       = rf_xarith_valid;
+    assign of_valid_xarith       = rf_valid_xarith;
     assign of_order_xarith       = rf_order_xarith;
     assign of_insn_xarith        = rf_insn_xarith;
     assign of_trap_xarith        = rf_trap_xarith;
@@ -563,7 +573,7 @@ module warp_issue (
     assign of_rd_addr_xarith     = rf_rd_addr_xarith;
     assign of_rd_wdata_xarith    = rf_rd_wdata_xarith;
 
-    assign of_valid_xlogic       = rf_xlogic_valid;
+    assign of_valid_xlogic       = rf_valid_xlogic;
     assign of_order_xlogic       = rf_order_xlogic;
     assign of_insn_xlogic        = rf_insn_xlogic;
     assign of_trap_xlogic        = rf_trap_xlogic;

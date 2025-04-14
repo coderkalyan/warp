@@ -77,10 +77,10 @@ module warp_decode (
     endgenerate
 
 `ifdef RISCV_FORMAL
-    localparam FBUNDLE_SIZE = 1 + 64 + 32 + 7 + 15;
+    localparam FBUNDLE_SIZE = 1 + 64 + 32 + 7 + 128 + 15;
     wire [FBUNDLE_SIZE - 1:0] f_ibundle [1:0];
-    assign f_ibundle[0] = {decode_raddr[0], if_ixl_ch0, if_mode_ch0, if_intr_ch0, if_halt_ch0, if_trap_ch0, if_insn_ch0, if_order_ch0, if_valid_ch0};
-    assign f_ibundle[1] = {decode_raddr[0], if_ixl_ch1, if_mode_ch1, if_intr_ch1, if_halt_ch1, if_trap_ch1, if_insn_ch1, if_order_ch1, if_valid_ch1};
+    assign f_ibundle[0] = {decode_raddr[0], if_pc_wdata_ch0, if_pc_rdata_ch0, if_ixl_ch0, if_mode_ch0, if_intr_ch0, if_halt_ch0, if_trap_ch0, if_insn_ch0, if_order_ch0, if_valid_ch0};
+    assign f_ibundle[1] = {decode_raddr[1], if_pc_wdata_ch1, if_pc_rdata_ch1, if_ixl_ch1, if_mode_ch1, if_intr_ch1, if_halt_ch1, if_trap_ch1, if_insn_ch1, if_order_ch1, if_valid_ch1};
 `else
     localparam FBUNDLE_SIZE = 0;
 `endif
@@ -112,7 +112,7 @@ module warp_decode (
     assign bundle[0] = skid_output_data[0 +: `BUNDLE_SIZE ];
     assign bundle[1] = skid_output_data[`BUNDLE_SIZE +: `BUNDLE_SIZE];
 
-`ifdef RISC_FORMAL
+`ifdef RISCV_FORMAL
     wire [FBUNDLE_SIZE - 1:0] f_obundle [1:0];
     assign f_obundle[0] = skid_output_data[`BUNDLE_SIZE * 2 +: FBUNDLE_SIZE];
     assign f_obundle[1] = skid_output_data[`BUNDLE_SIZE * 2 + FBUNDLE_SIZE +: FBUNDLE_SIZE];
@@ -120,14 +120,16 @@ module warp_decode (
     assign of_valid_ch0     = f_obundle[0][0] & output_valid;
     assign of_order_ch0     = f_obundle[0][1  +: 64];
     assign of_insn_ch0      = f_obundle[0][65 +: 32];
-    assign of_trap_ch0      = f_obundle[0][97];
+    assign of_trap_ch0      = !bundle[0][0];
     assign of_halt_ch0      = f_obundle[0][98];
     assign of_intr_ch0      = f_obundle[0][99];
     assign of_mode_ch0      = f_obundle[0][100 +: 2];
     assign of_ixl_ch0       = f_obundle[0][102 +: 2];
-    assign of_rs1_addr_ch0  = f_obundle[0][104 +: 5];
-    assign of_rs2_addr_ch0  = f_obundle[0][109 +: 5];
-    assign of_rd_addr_ch0   = f_obundle[0][114 +: 5];
+    assign of_pc_rdata_ch0  = f_obundle[0][104 +: 64];
+    assign of_pc_wdata_ch0  = f_obundle[0][168 +: 64];
+    assign of_rs1_addr_ch0  = f_obundle[0][232 +: 5];
+    assign of_rs2_addr_ch0  = f_obundle[0][237 +: 5];
+    assign of_rd_addr_ch0   = f_obundle[0][242 +: 5];
     assign of_rs1_rdata_ch0 = 64'h0; // filled in at later stage
     assign of_rs2_rdata_ch0 = 64'h0; // filled in at later stage
     assign of_rd_wdata_ch0  = 64'h0; // filled in at later stage
@@ -135,15 +137,17 @@ module warp_decode (
     assign of_valid_ch1     = f_obundle[1][0] & output_valid;
     assign of_order_ch1     = f_obundle[1][1 +: 64];
     assign of_insn_ch1      = f_obundle[1][65 +: 32];
-    assign of_trap_ch1      = f_obundle[1][97];
+    assign of_trap_ch1      = !bundle[1][0];
     assign of_halt_ch1      = f_obundle[1][98];
     assign of_intr_ch1      = f_obundle[1][99];
     assign of_mode_ch1      = f_obundle[1][100 +: 2];
     assign of_ixl_ch1       = f_obundle[1][102 +: 2];
-    assign of_rs_ch1_addr1  = f_obundle[1][104 +: 5];
-    assign of_rs2_addr_ch1  = f_obundle[1][109 +: 5];
-    assign of_rd_addr_ch1   = f_obundle[1][114 +: 5];
-    assign of_rs_ch1_rdata1 = 64'h0; // filled in at later stage
+    assign of_pc_rdata_ch1  = f_obundle[1][104 +: 64];
+    assign of_pc_wdata_ch1  = f_obundle[1][168 +: 64];
+    assign of_rs1_addr_ch1  = f_obundle[1][232 +: 5];
+    assign of_rs2_addr_ch1  = f_obundle[1][237 +: 5];
+    assign of_rd_addr_ch1   = f_obundle[1][242 +: 5];
+    assign of_rs1_rdata_ch1 = 64'h0; // filled in at later stage
     assign of_rs2_rdata_ch1 = 64'h0; // filled in at later stage
     assign of_rd_wdata_ch1  = 64'h0; // filled in at later stage
 `endif

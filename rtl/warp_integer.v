@@ -172,7 +172,7 @@ module warp_xarith (
             rf_rs1_rdata   <= if_rs1_rdata;
             rf_rs2_rdata   <= if_rs2_rdata;
             rf_rd_addr     <= if_rd_addr;
-            rf_rd_wdata    <= if_rd_wdata;
+            rf_rd_wdata    <= (if_rd_addr == 32'd0) ? 64'd0 : result;
         end
     end
 

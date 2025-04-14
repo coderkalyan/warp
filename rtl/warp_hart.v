@@ -11,6 +11,9 @@ module warp_hart #(
     output wire [38:0] o_imem_raddr,
     input  wire        i_imem_valid,
     input  wire [63:0] i_imem_rdata
+    `ifdef RISCV_FORMAL
+        ,`RVFI_OUTPUTS
+    `endif
 );
     // instruction fetch
     wire        imem_ren, imem_valid;
@@ -25,11 +28,13 @@ module warp_hart #(
     wire [31:0] f_fetch_insn0;
     wire        f_fetch_trap0, f_fetch_halt0, f_fetch_intr0;
     wire [ 1:0] f_fetch_mode0, f_fetch_ixl0;
+    wire [63:0] f_fetch_pc_rdata0, f_fetch_pc_wdata0;
     wire        f_fetch_valid1;
     wire [63:0] f_fetch_order1;
     wire [31:0] f_fetch_insn1;
     wire        f_fetch_trap1, f_fetch_halt1, f_fetch_intr1;
     wire [ 1:0] f_fetch_mode1, f_fetch_ixl1;
+    wire [63:0] f_fetch_pc_rdata1, f_fetch_pc_wdata1;
 `endif
     warp_fetch fetch (
         .i_clk(i_clk), .i_rst_n(i_rst_n),
@@ -45,6 +50,8 @@ module warp_hart #(
         .of_intr_ch0(f_fetch_intr0),
         .of_mode_ch0(f_fetch_mode0),
         .of_ixl_ch0(f_fetch_ixl0),
+        .of_pc_rdata_ch0(f_fetch_pc_rdata0),
+        .of_pc_wdata_ch0(f_fetch_pc_wdata0),
         .of_valid_ch1(f_fetch_valid1),
         .of_order_ch1(f_fetch_order1),
         .of_insn_ch1(f_fetch_insn1),
@@ -53,6 +60,8 @@ module warp_hart #(
         .of_intr_ch1(f_fetch_intr1),
         .of_mode_ch1(f_fetch_mode1),
         .of_ixl_ch1(f_fetch_ixl1),
+        .of_pc_rdata_ch1(f_fetch_pc_rdata1),
+        .of_pc_wdata_ch1(f_fetch_pc_wdata1),
 `endif
         .o_inst0(fetch_inst0), .o_inst1(fetch_inst1),
         .o_compressed(fetch_compressed)
@@ -75,6 +84,7 @@ module warp_hart #(
     wire [31:0] f_decode_insn0;
     wire        f_decode_trap0, f_decode_halt0, f_decode_intr0;
     wire [ 1:0] f_decode_mode0, f_decode_ixl0;
+    wire [63:0] f_decode_pc_rdata0, f_decode_pc_wdata0;
     wire [ 4:0] f_decode_rs1_addr0, f_decode_rs2_addr0, f_decode_rd_addr0;
     wire [63:0] f_decode_rs1_rdata0, f_decode_rs2_rdata0, f_decode_rd_wdata0;
     wire        f_decode_valid1;
@@ -82,6 +92,7 @@ module warp_hart #(
     wire [31:0] f_decode_insn1;
     wire        f_decode_trap1, f_decode_halt1, f_decode_intr1;
     wire [ 1:0] f_decode_mode1, f_decode_ixl1;
+    wire [63:0] f_decode_pc_rdata1, f_decode_pc_wdata1;
     wire [ 4:0] f_decode_rs1_addr1, f_decode_rs2_addr1, f_decode_rd_addr1;
     wire [63:0] f_decode_rs1_rdata1, f_decode_rs2_rdata1, f_decode_rd_wdata1;
 `endif
@@ -99,6 +110,8 @@ module warp_hart #(
         .if_intr_ch0(f_fetch_intr0),
         .if_mode_ch0(f_fetch_mode0),
         .if_ixl_ch0(f_fetch_ixl0),
+        .if_pc_rdata_ch0(f_fetch_pc_rdata0),
+        .if_pc_wdata_ch0(f_fetch_pc_wdata0),
         .if_valid_ch1(f_fetch_valid1),
         .if_order_ch1(f_fetch_order1),
         .if_insn_ch1(f_fetch_insn1),
@@ -107,6 +120,8 @@ module warp_hart #(
         .if_intr_ch1(f_fetch_intr1),
         .if_mode_ch1(f_fetch_mode1),
         .if_ixl_ch1(f_fetch_ixl1),
+        .if_pc_rdata_ch1(f_fetch_pc_rdata1),
+        .if_pc_wdata_ch1(f_fetch_pc_wdata1),
 
         .of_valid_ch0(f_decode_valid0),
         .of_order_ch0(f_decode_order0),
@@ -116,6 +131,8 @@ module warp_hart #(
         .of_intr_ch0(f_decode_intr0),
         .of_mode_ch0(f_decode_mode0),
         .of_ixl_ch0(f_decode_ixl0),
+        .of_pc_rdata_ch0(f_decode_pc_rdata0),
+        .of_pc_wdata_ch0(f_decode_pc_wdata0),
         .of_rs1_addr_ch0(f_decode_rs1_addr0),
         .of_rs2_addr_ch0(f_decode_rs2_addr0),
         .of_rd_addr_ch0(f_decode_rd_addr0),
@@ -130,6 +147,8 @@ module warp_hart #(
         .of_intr_ch1(f_decode_intr1),
         .of_mode_ch1(f_decode_mode1),
         .of_ixl_ch1(f_decode_ixl1),
+        .of_pc_rdata_ch1(f_decode_pc_rdata1),
+        .of_pc_wdata_ch1(f_decode_pc_wdata1),
         .of_rs1_addr_ch1(f_decode_rs1_addr1),
         .of_rs2_addr_ch1(f_decode_rs2_addr1),
         .of_rd_addr_ch1(f_decode_rd_addr1),
@@ -190,6 +209,8 @@ module warp_hart #(
         .if_intr_ch0(f_decode_intr0),
         .if_mode_ch0(f_decode_mode0),
         .if_ixl_ch0(f_decode_ixl0),
+        .if_pc_rdata_ch0(f_decode_pc_rdata0),
+        .if_pc_wdata_ch0(f_decode_pc_wdata0),
         .if_rs1_addr_ch0(f_decode_rs1_addr0),
         .if_rs2_addr_ch0(f_decode_rs2_addr0),
         .if_rd_addr_ch0(f_decode_rd_addr0),
@@ -204,6 +225,8 @@ module warp_hart #(
         .if_intr_ch1(f_decode_intr1),
         .if_mode_ch1(f_decode_mode1),
         .if_ixl_ch1(f_decode_ixl1),
+        .if_pc_rdata_ch1(f_decode_pc_rdata1),
+        .if_pc_wdata_ch1(f_decode_pc_wdata1),
         .if_rs1_addr_ch1(f_decode_rs1_addr1),
         .if_rs2_addr_ch1(f_decode_rs2_addr1),
         .if_rd_addr_ch1(f_decode_rd_addr1),
@@ -219,6 +242,8 @@ module warp_hart #(
         .of_intr_xarith(f_issue_intr_xarith),
         .of_mode_xarith(f_issue_mode_xarith),
         .of_ixl_xarith(f_issue_ixl_xarith),
+        .of_pc_rdata_xarith(f_issue_pc_rdata_xarith),
+        .of_pc_wdata_xarith(f_issue_pc_wdata_xarith),
         .of_rs1_addr_xarith(f_issue_rs1_addr_xarith),
         .of_rs2_addr_xarith(f_issue_rs2_addr_xarith),
         .of_rd_addr_xarith(f_issue_rd_addr_xarith),
@@ -234,6 +259,8 @@ module warp_hart #(
         .of_intr_xlogic(f_issue_intr_xlogic),
         .of_mode_xlogic(f_issue_mode_xlogic),
         .of_ixl_xlogic(f_issue_ixl_xlogic),
+        .of_pc_rdata_xlogic(f_issue_pc_rdata_xlogic),
+        .of_pc_wdata_xlogic(f_issue_pc_wdata_xlogic),
         .of_rs1_addr_xlogic(f_issue_rs1_addr_xlogic),
         .of_rs2_addr_xlogic(f_issue_rs2_addr_xlogic),
         .of_rd_addr_xlogic(f_issue_rd_addr_xlogic),
@@ -302,14 +329,13 @@ module warp_hart #(
 
     // FIXME: this isn't true due to backpressure from the register file
     assign xarith_ready = 1'b1;
-    wire [63:0] xarith_op1 = xarith_banksel ? rs1_rdata : rs3_rdata;
-    wire [63:0] xarith_op2 = xarith_op2_sel ? xarith_imm : (xarith_banksel ? rs1_rdata : rs3_rdata);
+    wire [63:0] xarith_rs1 = xarith_banksel ? rs1_rdata : rs3_rdata;
+    wire [63:0] xarith_rs2 = xarith_banksel ? rs2_rdata : rs4_rdata;
+    wire [63:0] xarith_op1 = xarith_rs1;
+    wire [63:0] xarith_op2 = xarith_op2_sel ? xarith_imm : xarith_rs2;
     wire [63:0] xarith_result;
     wire        xarith_branch, xarith_wen;
     wire [4:0]  xarith_write_rd;
-    wire        f_xarith_write_valid;
-    wire [31:0] f_xarith_write_inst;
-    wire [63:0] f_xarith_write_order;
 `ifdef RISCV_FORMAL
     wire        f_xarith_valid;
     wire [63:0] f_xarith_order;
@@ -355,8 +381,8 @@ module warp_hart #(
         .if_pc_wdata    (f_issue_pc_wdata_xarith),
         .if_rs1_addr    (f_issue_rs1_addr_xarith),
         .if_rs2_addr    (f_issue_rs2_addr_xarith),
-        .if_rs1_rdata   (f_issue_rs1_rdata_xarith),
-        .if_rs2_rdata   (f_issue_rs2_rdata_xarith),
+        .if_rs1_rdata   (xarith_rs1),
+        .if_rs2_rdata   (xarith_rs2),
         .if_rd_addr     (f_issue_rd_addr_xarith),
         .if_rd_wdata    (f_issue_rd_wdata_xarith),
         .of_valid       (f_xarith_valid),
@@ -472,16 +498,53 @@ module warp_hart #(
     // writeback
     // TODO: this is not correct once priority logic above is
     // implemented
-// `ifdef RISCV_FORMAL
-//     // retire channel 0
-//     assign rvfi_valid[0]    = f_xarith_write_valid;
-//     assign rvfi_order[63:0] = f_xarith_write_order;
-//     assign rvfi_insn[31:0]  = f_xarith_write_inst;
-//     assign rvfi_halt[0]     = 1'b0; // no halt support yet
-//     assign rvfi_intr[0]     = 1'b0; // no interrupt support yet
-//     assign rvfi_mode[1:0]   = 2'h3; // machine mode (m)
-//     assign rvfi_ixl[1:0]    = 2'h2; // 64 bit
-// `endif
+`ifdef RISCV_FORMAL
+    // retire channel 0
+    assign rvfi_valid[0]        = f_xarith_valid;
+    assign rvfi_order[63:0]     = f_xarith_order;
+    assign rvfi_insn[31:0]      = f_xarith_insn;
+    assign rvfi_trap[0]         = f_xarith_trap;
+    assign rvfi_halt[0]         = f_xarith_halt;
+    assign rvfi_intr[0]         = f_xarith_intr;
+    assign rvfi_mode[1:0]       = f_xarith_mode;
+    assign rvfi_ixl[1:0]        = f_xarith_ixl;
+    assign rvfi_rs1_addr[4:0]   = f_xarith_rs1_addr;
+    assign rvfi_rs2_addr[4:0]   = f_xarith_rs2_addr;
+    assign rvfi_rs1_rdata[63:0] = f_xarith_rs1_rdata;
+    assign rvfi_rs2_rdata[63:0] = f_xarith_rs2_rdata;
+    assign rvfi_rd_addr[4:0]    = f_xarith_rd_addr;
+    assign rvfi_rd_wdata[63:0]  = f_xarith_rd_wdata;
+    assign rvfi_pc_rdata[63:0]  = f_xarith_pc_rdata;
+    assign rvfi_pc_wdata[63:0]  = f_xarith_pc_wdata;
+    assign rvfi_mem_addr[63:0]  = 0;
+    assign rvfi_mem_rmask[7:0]  = 0;
+    assign rvfi_mem_rdata[63:0] = 0;
+    assign rvfi_mem_wmask[7:0]  = 0;
+    assign rvfi_mem_wdata[63:0] = 0;
+
+    // retire channel 1
+    assign rvfi_valid[1]          = f_xlogic_valid;
+    assign rvfi_order[127:64]     = f_xlogic_order;
+    assign rvfi_insn[63:32]       = f_xlogic_insn;
+    assign rvfi_trap[1]           = f_xlogic_trap;
+    assign rvfi_halt[1]           = f_xlogic_halt;
+    assign rvfi_intr[1]           = f_xlogic_intr;
+    assign rvfi_mode[3:2]         = f_xlogic_mode;
+    assign rvfi_ixl[3:2]          = f_xlogic_ixl;
+    assign rvfi_rs1_addr[9:5]     = f_xlogic_rs1_addr;
+    assign rvfi_rs2_addr[9:5]     = f_xlogic_rs2_addr;
+    assign rvfi_rs1_rdata[127:64] = f_xlogic_rs1_rdata;
+    assign rvfi_rs2_rdata[127:64] = f_xlogic_rs2_rdata;
+    assign rvfi_rd_addr[9:5]      = f_xlogic_rd_addr;
+    assign rvfi_rd_wdata[127:64]  = f_xlogic_rd_wdata;
+    assign rvfi_pc_rdata[127:64]  = f_xlogic_pc_rdata;
+    assign rvfi_pc_wdata[127:64]  = f_xlogic_pc_wdata;
+    assign rvfi_mem_addr[127:64]  = 0;
+    assign rvfi_mem_rmask[15:8]   = 0;
+    assign rvfi_mem_rdata[127:64] = 0;
+    assign rvfi_mem_wmask[15:8]   = 0;
+    assign rvfi_mem_wdata[127:64] = 0;
+`endif
 
     // TODO: wen can be merged with write_rd to 0
     assign inst0_retire = (32'h1 << xarith_write_rd) & {32{xarith_wen}};
