@@ -2,11 +2,6 @@
 
 // `include "warp_defines.v"
 
-`define XSHIFT_OP_SHL 2'b00
-`define XSHIFT_OP_SHR 2'b01
-`define XSHIFT_OP_ROL 2'b10
-`define XSHIFT_OP_ROR 2'b11
-
 // scalar integer arithmetic unit - add/sub, set less than, min/max, branch
 // latency: 1 cycle
 // initiation interval: 1 cycle
@@ -383,6 +378,105 @@ module warp_xshift (
     input  wire        i_word,
     output wire [63:0] o_result
 );
+    // Internal wires for each shift stage
+    wire [63:0] stage0_rol, stage1_rol, stage2_rol, stage3_rol, stage4_rol, stage5_rol;
+    wire [63:0] stage0_ror, stage1_ror, stage2_ror, stage3_ror, stage4_ror, stage5_ror;
+    wire [63:0] stage0_shl, stage1_shl, stage2_shl, stage3_shl, stage4_shl, stage5_shl;
+    wire [63:0] stage0_shr, stage1_shr, stage2_shr, stage3_shr, stage4_shr, stage5_shr;
+    
+    // 32-bit rotation wires using consistent style
+    wire [31:0] stage0_rol_32, stage1_rol_32, stage2_rol_32, stage3_rol_32, stage4_rol_32;
+    wire [31:0] stage0_ror_32, stage1_ror_32, stage2_ror_32, stage3_ror_32, stage4_ror_32;
+    wire [31:0] rotated_32_result;
+    wire [63:0] rotated_32;
+    
+    wire [63:0] operand_in;
+    wire [63:0] o_result_tmp;
+
+    // if i_word true between rotate or shift outputs for 32 bits, else select 64 bit 
+    assign o_result = (i_word) ? (
+        ((i_opsel == `XSHIFT_OP_ROL) | (i_opsel == `XSHIFT_OP_ROR)) ? rotated_32 :
+        {{32{o_result_tmp[31]}}, o_result_tmp[31:0]}
+    ) : o_result_tmp;
+
+    // sign extend for i_word before operation 
+    assign operand_in = i_word ? {{32{i_operand[31]}}, i_operand[31:0]} : i_operand;
+
+    // Barrel shifter stages for 64-bit operations
+    // Stage 0: shift or rotate by 1
+    assign stage0_shl = (i_amount[0]) ? ({operand_in[62:0], 1'b0}) : operand_in;
+    assign stage0_shr = (i_amount[0]) ? ({(i_arithmetic & operand_in[63]), operand_in[63:1]}) : operand_in;
+    assign stage0_rol = (i_amount[0]) ? ({operand_in[62:0], operand_in[63]}) : operand_in;
+    assign stage0_ror = (i_amount[0]) ? ({operand_in[0], operand_in[63:1]}) : operand_in;
+
+    // Stage 1: shift or rotate by 2
+    assign stage1_shl = (i_amount[1]) ? ({stage0_shl[61:0], 2'b0}) : stage0_shl;
+    assign stage1_shr = (i_amount[1]) ? ({{2{i_arithmetic & stage0_shr[63]}}, stage0_shr[63:2]}) : stage0_shr;
+    assign stage1_rol = (i_amount[1]) ? ({stage0_rol[61:0], stage0_rol[63:62]}) : stage0_rol;
+    assign stage1_ror = (i_amount[1]) ? ({stage0_ror[1:0], stage0_ror[63:2]}) : stage0_ror;
+
+    // Stage 2: shift or rotate by 4
+    assign stage2_shl = (i_amount[2]) ? ({stage1_shl[59:0], 4'b0}) : stage1_shl;
+    assign stage2_shr = (i_amount[2]) ? ({{4{i_arithmetic & stage1_shr[63]}}, stage1_shr[63:4]}) : stage1_shr;
+    assign stage2_rol = (i_amount[2]) ? ({stage1_rol[59:0], stage1_rol[63:60]}) : stage1_rol;
+    assign stage2_ror = (i_amount[2]) ? ({stage1_ror[3:0], stage1_ror[63:4]}) : stage1_ror;
+
+    // Stage 3: shift or rotate by 8
+    assign stage3_shl = (i_amount[3]) ? ({stage2_shl[55:0], 8'b0}) : stage2_shl;
+    assign stage3_shr = (i_amount[3]) ? ({{8{i_arithmetic & stage2_shr[63]}}, stage2_shr[63:8]}) : stage2_shr;
+    assign stage3_rol = (i_amount[3]) ? ({stage2_rol[55:0], stage2_rol[63:56]}) : stage2_rol;
+    assign stage3_ror = (i_amount[3]) ? ({stage2_ror[7:0], stage2_ror[63:8]}) : stage2_ror;
+
+    // Stage 4: shift or rotate by 16
+    assign stage4_shl = (i_amount[4]) ? ({stage3_shl[47:0], 16'b0}) : stage3_shl;
+    assign stage4_shr = (i_amount[4]) ? ({{16{i_arithmetic & stage3_shr[63]}}, stage3_shr[63:16]}) : stage3_shr;
+    assign stage4_rol = (i_amount[4]) ? ({stage3_rol[47:0], stage3_rol[63:48]}) : stage3_rol;
+    assign stage4_ror = (i_amount[4]) ? ({stage3_ror[15:0], stage3_ror[63:16]}) : stage3_ror;
+
+    // Stage 5: shift or rotate by 32
+    assign stage5_shl = (i_amount[5] & ~i_word) ? ({stage4_shl[31:0], 32'b0}) : stage4_shl;
+    assign stage5_shr = (i_amount[5] & ~i_word) ? ({{32{i_arithmetic & stage4_shr[63]}}, stage4_shr[63:32]}) : stage4_shr;
+    assign stage5_rol = (i_amount[5]) ? ({stage4_rol[31:0], stage4_rol[63:32]}) : stage4_rol;
+    assign stage5_ror = (i_amount[5]) ? ({stage4_ror[31:0], stage4_ror[63:32]}) : stage4_ror;
+
+    // 32-bit rotation stages - using separate wires for each operation
+    // Stage 0: rotate by 1 (32 bit)
+    assign stage0_rol_32 = (i_amount[0]) ? {i_operand[30:0], i_operand[31]} : i_operand[31:0];
+    assign stage0_ror_32 = (i_amount[0]) ? {i_operand[0], i_operand[31:1]} : i_operand[31:0];
+
+    // Stage 1: rotate by 2 (32 bit)
+    assign stage1_rol_32 = (i_amount[1]) ? {stage0_rol_32[29:0], stage0_rol_32[31:30]} : stage0_rol_32;
+    assign stage1_ror_32 = (i_amount[1]) ? {stage0_ror_32[1:0], stage0_ror_32[31:2]} : stage0_ror_32;
+
+    // Stage 2: rotate by 4 (32 bit)
+    assign stage2_rol_32 = (i_amount[2]) ? {stage1_rol_32[27:0], stage1_rol_32[31:28]} : stage1_rol_32;
+    assign stage2_ror_32 = (i_amount[2]) ? {stage1_ror_32[3:0], stage1_ror_32[31:4]} : stage1_ror_32;
+
+    // Stage 3: rotate by 8 (32 bit)
+    assign stage3_rol_32 = (i_amount[3]) ? {stage2_rol_32[23:0], stage2_rol_32[31:24]} : stage2_rol_32;
+    assign stage3_ror_32 = (i_amount[3]) ? {stage2_ror_32[7:0], stage2_ror_32[31:8]} : stage2_ror_32;
+
+    // Stage 4: rotate by 16 (32 bit)
+    assign stage4_rol_32 = (i_amount[4]) ? {stage3_rol_32[15:0], stage3_rol_32[31:16]} : stage3_rol_32;
+    assign stage4_ror_32 = (i_amount[4]) ? {stage3_ror_32[15:0], stage3_ror_32[31:16]} : stage3_ror_32;
+
+    // Select the appropriate 32-bit rotation result based on operation
+    assign rotated_32_result = (i_opsel == `XSHIFT_OP_ROL) ? stage4_rol_32 : stage4_ror_32;
+    
+    // Sign extend the 32-bit result to 64 bits
+    assign rotated_32 = {{32{rotated_32_result[31]}}, rotated_32_result};
+
+    // Select operation for final output using case statement
+    reg [63:0] o_result_tmp;
+    always @(*) begin
+        case (i_opsel)
+            `XSHIFT_OP_SHL: o_result_tmp = stage5_shl;
+            `XSHIFT_OP_SHR: o_result_tmp = stage5_shr;
+            `XSHIFT_OP_ROL: o_result_tmp = stage5_rol;
+            `XSHIFT_OP_ROR: o_result_tmp = stage5_ror;
+            default:        o_result_tmp = 64'hx;  // For safety
+        endcase
+    end
 endmodule
 
 // multiplies two 64 bit operands and outputs the lower 64 bits of
