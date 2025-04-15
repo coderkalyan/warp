@@ -1,0 +1,65 @@
+[options]
+mode cover
+append 0
+tbtop wrapper.uut
+depth 150
+
+[engines]
+smtbmc boolector
+
+[script]
+read -sv defines.sv \
+    cover.sv \
+    wrapper.sv \
+    sbram.sv \
+    serv_bufreg.v \
+    serv_bufreg2.v \
+    serv_alu.v \
+    serv_csr.v \
+    serv_ctrl.v \
+    serv_decode.v \
+    serv_immdec.v \
+    serv_mem_if.v \
+    serv_rf_if.v \
+    serv_rf_ram.v \
+    serv_rf_ram_if.v \
+    serv_debug.v \
+    serv_state.v \
+    serv_top.v \
+    serv_rf_top.v
+prep -flatten -nordff -top testbench
+
+[files]
+cover.sv
+wrapper.sv
+sbram.sv
+serv-src/rtl/serv_bufreg.v
+serv-src/rtl/serv_bufreg2.v
+serv-src/rtl/serv_alu.v
+serv-src/rtl/serv_csr.v
+serv-src/rtl/serv_ctrl.v
+serv-src/rtl/serv_decode.v
+serv-src/rtl/serv_immdec.v
+serv-src/rtl/serv_mem_if.v
+serv-src/rtl/serv_rf_if.v
+serv-src/rtl/serv_rf_ram.v
+serv-src/rtl/serv_rf_ram_if.v
+serv-src/rtl/serv_state.v
+serv-src/rtl/serv_debug.v
+serv-src/rtl/serv_top.v
+serv-src/rtl/serv_rf_top.v
+../../checks/rvfi_macros.vh
+
+[file defines.sv]
+`define RISCV_FORMAL
+`define RISCV_FORMAL_NRET 1
+`define RISCV_FORMAL_XLEN 32
+`define RISCV_FORMAL_ILEN 32
+`define RISCV_FORMAL_RESET_CYCLES 1
+`define RISCV_FORMAL_CHECK_CYCLE 20
+`define RISCV_FORMAL_CHANNEL_IDX 0
+`define RISCV_FORMAL_CHECKER rvfi_insn_check
+`define RISCV_FORMAL_INSN_MODEL rvfi_insn_add
+`define RISCV_FORMAL_ALIGNED_MEM
+`define MEMIO_FAIRNESS
+`include "rvfi_macros.vh"
