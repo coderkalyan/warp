@@ -23,7 +23,11 @@ module warp_fetch #(
     // currently implementing risc-v sv39, meaning instructions are
     // addressed in a 39 bit virtual address space. the fetch unit
     // doesn't care what the underlying physical address space is
-    output wire [38:0] o_imem_raddr,
+    // FIXME: using 64 bit PC for now to simplify verification in
+    // machine (M) mode. once user/supervisor mode and virtual memory
+    // are implemented this should be a 39 bit address (look into the
+    // implications for auipc)
+    output wire [63:0] o_imem_raddr,
     input  wire        i_imem_valid,
     input  wire [63:0] i_imem_rdata,
     // input  wire [63:0] i_branch_target,
@@ -49,11 +53,11 @@ module warp_fetch #(
 `endif
     output wire [31:0] o_inst0,
     output wire [31:0] o_inst1,
-    output wire [38:0] o_inst0_pc,
-    output wire [38:0] o_inst1_pc,
+    output wire [63:0] o_inst0_pc,
+    output wire [63:0] o_inst1_pc,
     output wire [ 1:0] o_compressed
 );
-    reg [38:0] pc, next_pc;
+    reg [63:0] pc, next_pc;
     always @(posedge i_clk, negedge i_rst_n) begin
         if (!i_rst_n)
             pc <= RESET_ADDR;

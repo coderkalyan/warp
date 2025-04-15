@@ -15,8 +15,8 @@ module warp_decode (
     input  wire        i_input_valid,
     input  wire [31:0] i_inst0,
     input  wire [31:0] i_inst1,
-    input  wire [38:0] i_inst0_pc,
-    input  wire [38:0] i_inst1_pc,
+    input  wire [63:0] i_inst0_pc,
+    input  wire [63:0] i_inst1_pc,
     input  wire [1:0]  i_compressed,
 `ifdef RISCV_FORMAL
     `RVFI_METADATA_INPUTS(_ch0),
@@ -41,7 +41,7 @@ module warp_decode (
     output wire [`BUNDLE_SIZE - 1:0] o_bundle1
 );
     wire [31:0] decode_inst     [1:0];
-    wire [38:0] decode_pc       [1:0];
+    wire [63:0] decode_pc       [1:0];
     wire        decode_legal    [1:0];
     wire [14:0] decode_raddr    [1:0];
     wire [31:0] decode_imm      [1:0]; // TODO: consider reducing imm size by doing signext later
@@ -78,7 +78,7 @@ module warp_decode (
             assign decode_bundle[i][53:52] = decode_shared[i];
             assign decode_bundle[i][61:54] = decode_xarith[i];
             assign decode_bundle[i][68:62] = decode_xlogic[i];
-            assign decode_bundle[i][107:69] = decode_pc[i];
+            assign decode_bundle[i][132:69] = decode_pc[i];
         end
     endgenerate
 

@@ -33,7 +33,7 @@ module warp_issue (
     output wire        o_xarith_op1_sel,
     output wire        o_xarith_op2_sel,
     output wire [63:0] o_xarith_imm,
-    output wire [38:0] o_xarith_pc,
+    output wire [63:0] o_xarith_pc,
     output wire [ 1:0] o_xarith_opsel,
     output wire        o_xarith_sub,
     output wire        o_xarith_unsigned,
@@ -131,7 +131,7 @@ module warp_issue (
     wire [ 1:0] bundle0_shared   = i_bundle0[53:52];
     wire [ 7:0] bundle0_xarith   = i_bundle0[61:54];
     wire [ 6:0] bundle0_xlogic   = i_bundle0[68:62];
-    wire [38:0] bundle0_pc       = i_bundle0[107:69];
+    wire [63:0] bundle0_pc       = i_bundle0[132:69];
 
     wire        bundle1_legal    = i_bundle1[ 0: 0];
     wire [14:0] bundle1_raddr    = i_bundle1[15: 1];
@@ -140,7 +140,7 @@ module warp_issue (
     wire [ 1:0] bundle1_shared   = i_bundle1[53:52];
     wire [ 7:0] bundle1_xarith   = i_bundle1[61:54];
     wire [ 6:0] bundle1_xlogic   = i_bundle1[68:62];
-    wire [38:0] bundle1_pc       = i_bundle1[107:69];
+    wire [63:0] bundle1_pc       = i_bundle1[132:69];
 
     // immediates are at most 32 bits in the instruction (actually less),
     // so sign extend them here to 64 bits
@@ -188,7 +188,7 @@ module warp_issue (
 
     // switch xarith control signals based on port usage
     wire [63:0] xarith_imm    = bundle0_dispatch_xarith ? bundle0_imm         : bundle1_imm;
-    wire [38:0] xarith_pc     = bundle0_dispatch_xarith ? bundle0_pc          : bundle1_pc;
+    wire [63:0] xarith_pc     = bundle0_dispatch_xarith ? bundle0_pc          : bundle1_pc;
     wire [ 1:0] xarith_opsel  = bundle0_dispatch_xarith ? bundle0_xarith[1:0] : bundle1_xarith[1:0];
     wire xarith_sub           = bundle0_dispatch_xarith ? bundle0_xarith[2]   : bundle1_xarith[2];
     wire xarith_unsigned      = bundle0_dispatch_xarith ? bundle0_xarith[3]   : bundle1_xarith[3];
@@ -367,7 +367,7 @@ module warp_issue (
 
     reg        r_xarith_banksel, r_xarith_op1_sel, r_xarith_op2_sel;
     reg [63:0] r_xarith_imm;
-    reg [38:0] r_xarith_pc;
+    reg [63:0] r_xarith_pc;
     reg [ 1:0] r_xarith_opsel;
     reg        r_xarith_sub, r_xarith_unsigned, r_xarith_cmp_mode;
     reg        r_xarith_branch_equal, r_xarith_branch_invert;

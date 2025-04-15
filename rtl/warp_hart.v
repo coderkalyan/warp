@@ -8,7 +8,7 @@ module warp_hart #(
     input  wire        i_clk,
     input  wire        i_rst_n,
     output wire        o_imem_ren,
-    output wire [38:0] o_imem_raddr,
+    output wire [63:0] o_imem_raddr,
     input  wire        i_imem_valid,
     input  wire [63:0] i_imem_rdata
     `ifdef RISCV_FORMAL
@@ -17,11 +17,11 @@ module warp_hart #(
 );
     // instruction fetch
     wire        imem_ren, imem_valid;
-    wire [38:0] imem_raddr;
+    wire [63:0] imem_raddr;
     wire [63:0] imem_rdata;
     wire        fetch_valid, decode_ready;
     wire [31:0] fetch_inst0, fetch_inst1;
-    wire [38:0] fetch_inst0_pc, fetch_inst1_pc;
+    wire [63:0] fetch_inst0_pc, fetch_inst1_pc;
     wire [ 1:0] fetch_compressed;
 `ifdef RISCV_FORMAL
     wire        f_fetch_valid0;
@@ -168,7 +168,7 @@ module warp_hart #(
     wire [ 1:0] xarith_opsel;
     wire        xarith_banksel, xarith_op1_sel, xarith_op2_sel;
     wire [63:0] xarith_imm;
-    wire [38:0] xarith_pc;
+    wire [63:0] xarith_pc;
     wire        xarith_sub, xarith_unsigned, xarith_cmp_mode, xarith_branch_equal;
     wire        xarith_branch_invert, xarith_word;
     wire [ 4:0] xarith_issue_rd;
