@@ -34,6 +34,9 @@ module warp_xarith (
     // comparison mode: when asserted, min, otherwise max
     // only used for OP_CMP
     input  wire        i_cmp_mode,
+    // if asserted, o_branch will contain the result of the branch
+    // calculation. otherwise o_branch will always be deasserted
+    input  wire        i_branch_en,
     // if asserted, branch resolution compares (in)equality
     // if not, compares less than (unsigned)
     input  wire        i_branch_equal,
@@ -82,7 +85,7 @@ module warp_xarith (
 
     // branch
     wire eq = i_op1 == i_op2;
-    wire branch = (i_branch_equal ? eq : slt) ^ i_branch_invert;
+    (* keep *) wire branch = i_branch_en && ((i_branch_equal ? eq : slt) ^ i_branch_invert);
 
     reg [63:0] result;
     always @(*) begin

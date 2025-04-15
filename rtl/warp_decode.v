@@ -15,8 +15,10 @@ module warp_decode (
     input  wire        i_input_valid,
     input  wire [31:0] i_inst0,
     input  wire [31:0] i_inst1,
-    input  wire [63:0] i_inst0_pc,
-    input  wire [63:0] i_inst1_pc,
+    input  wire [63:0] i_inst0_pc_rdata,
+    input  wire [63:0] i_inst0_pc_wdata,
+    input  wire [63:0] i_inst1_pc_rdata,
+    input  wire [63:0] i_inst1_pc_wdata,
     input  wire [1:0]  i_compressed,
 `ifdef RISCV_FORMAL
     `RVFI_METADATA_INPUTS(_ch0),
@@ -41,21 +43,24 @@ module warp_decode (
     output wire [`BUNDLE_SIZE - 1:0] o_bundle1
 );
     wire [31:0] decode_inst     [1:0];
-    wire [63:0] decode_pc       [1:0];
+    wire [63:0] decode_pc_rdata [1:0];
+    wire [63:0] decode_pc_wdata [1:0];
     wire        decode_legal    [1:0];
     wire [14:0] decode_raddr    [1:0];
     wire [31:0] decode_imm      [1:0]; // TODO: consider reducing imm size by doing signext later
     wire [3:0]  decode_pipeline [1:0];
-    wire [1:0]  decode_shared   [1:0];
-    wire [7:0]  decode_xarith   [1:0];
+    wire [2:0]  decode_shared   [1:0];
+    wire [8:0]  decode_xarith   [1:0];
     wire [6:0]  decode_xlogic   [1:0];
     wire [`BUNDLE_SIZE - 1:0] decode_bundle [1:0];
 
     // can't assign both of these inline due to verilog syntax limitations
     assign decode_inst[0] = i_inst0;
     assign decode_inst[1] = i_inst1;
-    assign decode_pc[0]   = i_inst0_pc;
-    assign decode_pc[1]   = i_inst1_pc;
+    assign decode_pc_rdata[0]   = i_inst0_pc_rdata;
+    assign decode_pc_wdata[0]   = i_inst0_pc_wdata;
+    assign decode_pc_rdata[1]   = i_inst1_pc_rdata;
+    assign decode_pc_wdata[1]   = i_inst1_pc_wdata;
 
     genvar i;
     generate
@@ -71,14 +76,15 @@ module warp_decode (
                 .o_xlogic(decode_xlogic[i])
             );
 
-            assign decode_bundle[i][ 0: 0] = decode_legal[i];
-            assign decode_bundle[i][15: 1] = decode_raddr[i];
-            assign decode_bundle[i][47:16] = decode_imm[i];
-            assign decode_bundle[i][51:48] = decode_pipeline[i];
-            assign decode_bundle[i][53:52] = decode_shared[i];
-            assign decode_bundle[i][61:54] = decode_xarith[i];
-            assign decode_bundle[i][68:62] = decode_xlogic[i];
-            assign decode_bundle[i][132:69] = decode_pc[i];
+            assign decode_bundle[i][ 0: 0]  = decode_legal[i];
+            assign decode_bundle[i][15: 1]  = decode_raddr[i];
+            assign decode_bundle[i][47:16]  = decode_imm[i];
+            assign decode_bundle[i][51:48]  = decode_pipeline[i];
+            assign decode_bundle[i][54:52]  = decode_shared[i];
+            assign decode_bundle[i][63:55]  = decode_xarith[i];
+            assign decode_bundle[i][70:64]  = decode_xlogic[i];
+            assign decode_bundle[i][134:71] = decode_pc_rdata[i];
+            assign decode_bundle[i][198:135] = decode_pc_wdata[i];
         end
     endgenerate
 
@@ -262,8 +268,8 @@ module warp_predecode (
     wire op_cbeqz  = i_inst[1:0] == 2'b01 && i_inst[15:13] == 3'b110;
     wire op_cbnez  = i_inst[1:0] == 2'b01 && i_inst[15:13] == 3'b111;
 
-    wire op_ubranch = op_branch || op_jal || op_jalr;
-    wire op_cbranch = op_cj || op_cjal || op_cjr || op_cjalr || op_cbeqz || op_cbnez;
+    wire op_ubranch = op_branch; // || op_jal || op_jalr;
+    wire op_cbranch = 1'b0; // op_cj || op_cjal || op_cjr || op_cjalr || op_cbeqz || op_cbnez;
     wire branch = i_compressed ? op_cbranch : op_ubranch;
 
     assign o_branch = branch;
@@ -280,15 +286,17 @@ module warp_udecode (
     output wire [3:0]  o_pipeline,
     // [0]   = op1_sel
     // [1]   = op2_sel
-    output wire [1:0]  o_shared,
+    // [2]   = rd_wen
+    output wire [2:0]  o_shared,
     // [1:0] = opsel
     // [2]   = sub
     // [3]   = unsigned
     // [4]   = cmp_mode
-    // [5]   = branch_equal
-    // [6]   = branch_invert
-    // [7]   = word
-    output wire [7:0]  o_xarith,
+    // [5]   = branch_en
+    // [6]   = branch_equal
+    // [7]   = branch_invert
+    // [8]   = word
+    output wire [8:0]  o_xarith,
     // [2:0] = opsel
     // [3]   = invert
     // [5:4] = sll
@@ -352,11 +360,11 @@ module warp_udecode (
     reg [3:0] pipeline;
     // shared control signals
     reg       rs1_clear;
-    reg       op1_sel, op2_sel;
+    reg       op1_sel, op2_sel, rd_wen;
     // xarith control signals
     reg [1:0] xarith_opsel;
     reg xarith_sub, xarith_unsigned, xarith_cmp_mode;
-    reg xarith_branch_equal, xarith_branch_invert;
+    reg xarith_branch_en, xarith_branch_equal, xarith_branch_invert;
     reg xarith_word;
     // xlogic control signals
     reg [2:0] xlogic_opsel;
@@ -369,10 +377,12 @@ module warp_udecode (
         rs1_clear = 1'b0;
         op1_sel = 1'b0;
         op2_sel = 1'b0;
+        rd_wen = 1'b0;
         xarith_opsel = 2'b00;
         xarith_sub = 1'b0;
         xarith_unsigned = 1'b0;
         xarith_cmp_mode = 1'b0;
+        xarith_branch_en = 1'b0;
         xarith_branch_equal = 1'b0;
         xarith_branch_invert = 1'b0;
         xarith_word = 1'b0;
@@ -440,6 +450,7 @@ module warp_udecode (
                 endcase
 
                 op2_sel = 1'b1;
+                rd_wen = 1'b1;
                 xarith_unsigned = funct3[0];
                 xlogic_invert = 1'b0;
             end
@@ -449,6 +460,7 @@ module warp_udecode (
                 pipeline = `PIPELINE_XARITH;
                 op1_sel = 1'b1;
                 op2_sel = 1'b1;
+                rd_wen = 1'b1;
                 xarith_opsel = `XARITH_OP_ADD;
                 xarith_sub = 1'b0;
                 xarith_word = 1'b0;
@@ -477,6 +489,7 @@ module warp_udecode (
                 endcase
 
                 op2_sel = 1'b1;
+                rd_wen = 1'b1;
                 xarith_sub = 1'b0;
                 xarith_word = 1'b1;
                 xlogic_invert = 1'b0;
@@ -532,6 +545,7 @@ module warp_udecode (
                 endcase
 
                 op2_sel = 1'b0;
+                rd_wen = 1'b1;
                 xarith_word = 1'b0;
                 xarith_unsigned = funct3[0];
                 xlogic_invert = 1'b0;
@@ -543,6 +557,7 @@ module warp_udecode (
                 pipeline = `PIPELINE_XARITH;
                 rs1_clear = 1'b1;
                 op2_sel = 1'b1;
+                rd_wen = 1'b1;
                 xarith_opsel = `XARITH_OP_ADD;
                 xarith_sub = 1'b0;
                 xarith_word = 1'b0;
@@ -570,10 +585,26 @@ module warp_udecode (
                 endcase
 
                 op2_sel = 1'b0;
+                rd_wen = 1'b1;
                 xarith_sub = funct7[5];
                 xarith_word = 1'b1;
                 xlogic_invert = 1'b0;
                 xlogic_word = 1'b1;
+            end
+            op_branch: begin
+                case (funct3)
+                    // beq
+                    3'b000: begin
+                        legal = 1'b1;
+                        pipeline = `PIPELINE_XARITH;
+                        xarith_sub = 1'b0;
+                        xarith_unsigned = 1'b0;
+                        xarith_branch_equal = 1'b1;
+                        xarith_branch_invert = 1'b0;
+                    end
+                endcase
+
+                xarith_branch_en = 1'b1;
             end
         endcase
     end
@@ -585,14 +616,16 @@ module warp_udecode (
 
     assign o_shared[0]   = op1_sel;
     assign o_shared[1]   = op2_sel;
+    assign o_shared[2]   = rd_wen;
 
     assign o_xarith[1:0] = xarith_opsel;
     assign o_xarith[2]   = xarith_sub;
     assign o_xarith[3]   = xarith_unsigned;
     assign o_xarith[4]   = xarith_cmp_mode;
-    assign o_xarith[5]   = xarith_branch_equal;
-    assign o_xarith[6]   = xarith_branch_invert;
-    assign o_xarith[7]   = xarith_word;
+    assign o_xarith[5]   = xarith_branch_en;
+    assign o_xarith[6]   = xarith_branch_equal;
+    assign o_xarith[7]   = xarith_branch_invert;
+    assign o_xarith[8]   = xarith_word;
 
     assign o_xlogic[2:0] = xlogic_opsel;
     assign o_xlogic[3]   = xlogic_invert;

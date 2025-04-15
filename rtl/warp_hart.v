@@ -19,9 +19,12 @@ module warp_hart #(
     wire        imem_ren, imem_valid;
     wire [63:0] imem_raddr;
     wire [63:0] imem_rdata;
+    wire        branch_valid;
+    wire [63:0] branch_target;
     wire        fetch_valid, decode_ready;
     wire [31:0] fetch_inst0, fetch_inst1;
-    wire [63:0] fetch_inst0_pc, fetch_inst1_pc;
+    wire [63:0] fetch_inst0_pc_rdata, fetch_inst1_pc_rdata;
+    wire [63:0] fetch_inst0_pc_wdata, fetch_inst1_pc_wdata;
     wire [ 1:0] fetch_compressed;
 `ifdef RISCV_FORMAL
     wire        f_fetch_valid0;
@@ -41,6 +44,7 @@ module warp_hart #(
         .i_clk(i_clk), .i_rst_n(i_rst_n),
         .o_imem_ren(imem_ren), .o_imem_raddr(imem_raddr),
         .i_imem_valid(imem_valid), .i_imem_rdata(imem_rdata),
+        .i_branch_valid(branch_valid), .i_branch_target(branch_target),
         .o_output_valid(fetch_valid), .i_output_ready(decode_ready),
 `ifdef RISCV_FORMAL
         .of_valid_ch0(f_fetch_valid0),
@@ -65,7 +69,8 @@ module warp_hart #(
         .of_pc_wdata_ch1(f_fetch_pc_wdata1),
 `endif
         .o_inst0(fetch_inst0), .o_inst1(fetch_inst1),
-        .o_inst0_pc(fetch_inst0_pc), .o_inst1_pc(fetch_inst1_pc),
+        .o_inst0_pc_rdata(fetch_inst0_pc_rdata), .o_inst1_pc_rdata(fetch_inst1_pc_rdata),
+        .o_inst0_pc_wdata(fetch_inst0_pc_wdata), .o_inst1_pc_wdata(fetch_inst1_pc_wdata),
         .o_compressed(fetch_compressed)
     );
 
@@ -102,7 +107,7 @@ module warp_hart #(
         .i_clk(i_clk), .i_rst_n(i_rst_n),
         .o_input_ready(decode_ready), .i_input_valid(fetch_valid),
         .i_inst0(fetch_inst0), .i_inst1(fetch_inst1),
-        .i_inst0_pc(fetch_inst0_pc), .i_inst1_pc(fetch_inst1_pc),
+        .i_inst0_pc_rdata(fetch_inst0_pc_rdata), .i_inst1_pc_rdata(fetch_inst1_pc_rdata),
         .i_compressed(fetch_compressed),
 `ifdef RISCV_FORMAL
         .if_valid_ch0(f_fetch_valid0),
@@ -167,14 +172,16 @@ module warp_hart #(
     wire        xarith_valid, xarith_ready;
     wire [ 1:0] xarith_opsel;
     wire        xarith_banksel, xarith_op1_sel, xarith_op2_sel;
+    wire        xarith_rd_wen;
     wire [63:0] xarith_imm;
-    wire [63:0] xarith_pc;
+    wire [63:0] xarith_pc_rdata, xarith_pc_wdata;
     wire        xarith_sub, xarith_unsigned, xarith_cmp_mode, xarith_branch_equal;
-    wire        xarith_branch_invert, xarith_word;
+    wire        xarith_branch_en, xarith_branch_invert, xarith_word;
     wire [ 4:0] xarith_issue_rd;
     wire        xlogic_valid, xlogic_ready;
     wire [ 2:0] xlogic_opsel;
     wire        xlogic_banksel, xlogic_op2_sel;
+    wire        xlogic_rd_wen;
     wire [63:0] xlogic_imm;
     wire        xlogic_invert, xlogic_word;
     wire [ 1:0] xlogic_sll;
@@ -279,12 +286,15 @@ module warp_hart #(
         .o_xarith_banksel(xarith_banksel),
         .o_xarith_op1_sel(xarith_op1_sel),
         .o_xarith_op2_sel(xarith_op2_sel),
+        .o_xarith_rd_wen(xarith_rd_wen),
         .o_xarith_imm(xarith_imm),
-        .o_xarith_pc(xarith_pc),
+        .o_xarith_pc_rdata(xarith_pc_rdata),
+        .o_xarith_pc_wdata(xarith_pc_wdata),
         .o_xarith_opsel(xarith_opsel),
         .o_xarith_sub(xarith_sub),
         .o_xarith_unsigned(xarith_unsigned),
         .o_xarith_cmp_mode(xarith_cmp_mode),
+        .o_xarith_branch_en(xarith_branch_en),
         .o_xarith_branch_equal(xarith_branch_equal),
         .o_xarith_branch_invert(xarith_branch_invert),
         .o_xarith_word(xarith_word),
@@ -293,6 +303,7 @@ module warp_hart #(
         .i_xarith_ready(xarith_ready),
         .o_xlogic_banksel(xlogic_banksel),
         .o_xlogic_op2_sel(xlogic_op2_sel),
+        .o_xlogic_rd_wen(xlogic_rd_wen),
         .o_xlogic_imm(xlogic_imm),
         .o_xlogic_opsel(xlogic_opsel),
         .o_xlogic_invert(xlogic_invert),
@@ -345,22 +356,22 @@ module warp_hart #(
     assign xarith_ready = 1'b1;
     wire [63:0] xarith_rs1 = r_xarith_banksel ? rs3_rdata : rs1_rdata;
     wire [63:0] xarith_rs2 = r_xarith_banksel ? rs4_rdata : rs2_rdata;
-    wire [63:0] xarith_op1 = xarith_op1_sel ? xarith_pc  : xarith_rs1;
-    wire [63:0] xarith_op2 = xarith_op2_sel ? xarith_imm : xarith_rs2;
+    wire [63:0] xarith_op1 = xarith_op1_sel ? xarith_pc_rdata : xarith_rs1;
+    wire [63:0] xarith_op2 = xarith_op2_sel ? xarith_imm      : xarith_rs2;
     wire [63:0] xarith_result;
-    wire        xarith_branch, xarith_wen;
+    wire        xarith_branch, xarith_result_valid;
     wire [4:0]  xarith_write_rd;
 `ifdef RISCV_FORMAL
     wire        f_xarith_valid;
     wire [63:0] f_xarith_order;
     wire [31:0] f_xarith_insn;
-    wire        f_xarith_trap;
+    wire        f_xarith_trap_tmp;
     wire        f_xarith_halt;
     wire        f_xarith_intr;
     wire [ 1:0] f_xarith_mode;
     wire [ 1:0] f_xarith_ixl;
     wire [63:0] f_xarith_pc_rdata;
-    wire [63:0] f_xarith_pc_wdata;
+    wire [63:0] f_xarith_pc_wdata_not_taken;
     wire [ 4:0] f_xarith_rs1_addr;
     wire [ 4:0] f_xarith_rs2_addr;
     wire [63:0] f_xarith_rs1_rdata;
@@ -379,6 +390,7 @@ module warp_hart #(
         .i_sub(xarith_sub),
         .i_unsigned(xarith_unsigned),
         .i_cmp_mode(xarith_cmp_mode),
+        .i_branch_en(xarith_branch_en),
         .i_branch_equal(xarith_branch_equal),
         .i_branch_invert(xarith_branch_invert),
         .i_word(xarith_word),
@@ -402,13 +414,13 @@ module warp_hart #(
         .of_valid       (f_xarith_valid),
         .of_order       (f_xarith_order),
         .of_insn        (f_xarith_insn),
-        .of_trap        (f_xarith_trap),
+        .of_trap        (f_xarith_trap_tmp),
         .of_halt        (f_xarith_halt),
         .of_intr        (f_xarith_intr),
         .of_mode        (f_xarith_mode),
         .of_ixl         (f_xarith_ixl),
         .of_pc_rdata    (f_xarith_pc_rdata),
-        .of_pc_wdata    (f_xarith_pc_wdata),
+        .of_pc_wdata    (f_xarith_pc_wdata_not_taken),
         .of_rs1_addr    (f_xarith_rs1_addr),
         .of_rs2_addr    (f_xarith_rs2_addr),
         .of_rs1_rdata   (f_xarith_rs1_rdata),
@@ -416,11 +428,48 @@ module warp_hart #(
         .of_rd_addr     (f_xarith_rd_addr),
         .of_rd_wdata    (f_xarith_rd_wdata),
 `endif
-        .o_valid(xarith_wen),
+        .o_valid(xarith_result_valid),
         .o_result(xarith_result),
         .o_branch(xarith_branch),
         .o_rd(xarith_write_rd)
     );
+
+    // NOTE: if the xarith unit takes more than 1 cycle this will break
+    reg [63:0] r_xarith_pc_rdata, r_xarith_pc_wdata;
+    reg [63:0] r_xarith_imm;
+    reg        r_xarith_rd_wen, r_xarith_branch_en;
+    always @(posedge i_clk, negedge i_rst_n) begin
+        if (!i_rst_n) begin
+            r_xarith_pc_rdata <= 64'h0;
+            r_xarith_pc_wdata <= 64'h0;
+            r_xarith_imm <= 64'h0;
+            r_xarith_rd_wen <= 1'b0;
+            r_xarith_branch_en <= 1'b0;
+        end else begin
+            r_xarith_pc_rdata <= xarith_pc_rdata;
+            r_xarith_pc_wdata <= xarith_pc_wdata;
+            r_xarith_imm <= xarith_imm;
+            r_xarith_rd_wen <= xarith_rd_wen;
+            r_xarith_branch_en <= xarith_branch_en;
+        end
+    end
+
+    wire [63:0] branch_taken_address = r_xarith_pc_rdata + r_xarith_imm;
+    assign branch_valid = xarith_result_valid;
+    assign branch_target = xarith_branch ? branch_taken_address : r_xarith_pc_wdata;
+
+`ifdef RISCV_FORMAL
+    wire [63:0] f_xarith_pc_wdata = xarith_branch ? branch_taken_address : f_xarith_pc_wdata_not_taken;
+    // FIXME: we should probably remove this from the formal interface
+    // and put it in the main datapath so we can actually trap on
+    // illegal branches (and other illegal instructions)
+    // FIXME: once this illegal address trap causes either a real trap or
+    // a halt in fetch, we can change this expression to only use
+    // branch_taken_address but for now we check the whole target (but only
+    // for branches)
+    // wire f_xarith_trap = f_xarith_trap_tmp || (xarith_branch && branch_taken_address[0]);
+    wire f_xarith_trap = f_xarith_trap_tmp || (r_xarith_branch_en && f_xarith_pc_wdata[0]);
+`endif
 
     reg r_xlogic_banksel;
     always @(posedge i_clk, negedge i_rst_n) begin
@@ -507,7 +556,7 @@ module warp_hart #(
     );
 
     // FIXME: priority logic needed to write more than two execution units
-    assign rd1_wen   = xarith_wen;
+    assign rd1_wen   = xarith_result_valid && r_xarith_rd_wen;
     assign rd1_addr  = xarith_write_rd;
     assign rd1_wdata = xarith_result;
     assign rd2_wen   = xlogic_wen;
@@ -574,7 +623,8 @@ module warp_hart #(
     assign rvfi_order[63:0]     = f_xarith_order;
     assign rvfi_insn[31:0]      = f_xarith_insn;
     assign rvfi_trap[0]         = f_xarith_trap;
-    assign rvfi_halt[0]         = f_xarith_halt;
+    // FIXME: no trap handler right now, so halt on trap
+    assign rvfi_halt[0]         = f_xarith_halt || f_xarith_trap;
     assign rvfi_intr[0]         = f_xarith_intr;
     assign rvfi_mode[1:0]       = f_xarith_mode;
     assign rvfi_ixl[1:0]        = f_xarith_ixl;
@@ -582,8 +632,8 @@ module warp_hart #(
     assign rvfi_rs2_addr[4:0]   = f_xarith_rs2_addr;
     assign rvfi_rs1_rdata[63:0] = f_xarith_rs1_rdata;
     assign rvfi_rs2_rdata[63:0] = f_xarith_rs2_rdata;
-    assign rvfi_rd_addr[4:0]    = f_xarith_rd_addr;
-    assign rvfi_rd_wdata[63:0]  = f_xarith_rd_wdata;
+    assign rvfi_rd_addr[4:0]    = r_xarith_rd_wen ? f_xarith_rd_addr : 5'd0;
+    assign rvfi_rd_wdata[63:0]  = (rvfi_rd_addr[4:0] == 5'd0) ? 64'h0 : f_xarith_rd_wdata;
     assign rvfi_pc_rdata[63:0]  = f_xarith_pc_rdata;
     assign rvfi_pc_wdata[63:0]  = f_xarith_pc_wdata;
     assign rvfi_mem_addr[63:0]  = 0;
@@ -597,7 +647,8 @@ module warp_hart #(
     assign rvfi_order[127:64]     = f_xlogic_order;
     assign rvfi_insn[63:32]       = f_xlogic_insn;
     assign rvfi_trap[1]           = f_xlogic_trap;
-    assign rvfi_halt[1]           = f_xlogic_halt;
+    // FIXME: no trap handler right now, so halt on trap
+    assign rvfi_halt[1]           = f_xlogic_halt || f_xlogic_trap;
     assign rvfi_intr[1]           = f_xlogic_intr;
     assign rvfi_mode[3:2]         = f_xlogic_mode;
     assign rvfi_ixl[3:2]          = f_xlogic_ixl;

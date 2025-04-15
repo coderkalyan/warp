@@ -14,7 +14,7 @@ smtbmc --stbv z3
 [script]
 verilog_defines -DWARP_FORMAL -DWARP_FORMAL_DEPTH=13
 read -formal warp_fetch.v warp_integer.v warp_decode.v warp_util.v
-prep -top warp_decode
+prep -top warp_fetch
 setundef -params -anyconst -undriven
 
 [files]

@@ -32,12 +32,15 @@ module warp_issue (
     output wire        o_xarith_banksel, // (rs1, rs2) or (rs3, rs4)
     output wire        o_xarith_op1_sel,
     output wire        o_xarith_op2_sel,
+    output wire        o_xarith_rd_wen,
     output wire [63:0] o_xarith_imm,
-    output wire [63:0] o_xarith_pc,
+    output wire [63:0] o_xarith_pc_rdata,
+    output wire [63:0] o_xarith_pc_wdata,
     output wire [ 1:0] o_xarith_opsel,
     output wire        o_xarith_sub,
     output wire        o_xarith_unsigned,
     output wire        o_xarith_cmp_mode,
+    output wire        o_xarith_branch_en,
     output wire        o_xarith_branch_equal,
     output wire        o_xarith_branch_invert,
     output wire        o_xarith_word,
@@ -53,6 +56,7 @@ module warp_issue (
     // op1 is always rs1, op2 is either rs2 or immediate
     output wire        o_xlogic_banksel, // (rs1, rs2) or (rs3, rs4)
     output wire        o_xlogic_op2_sel,
+    output wire        o_xlogic_rd_wen, // NOTE: this should always be true for now
     output wire [63:0] o_xlogic_imm,
     output wire [ 2:0] o_xlogic_opsel,
     output wire        o_xlogic_invert,
@@ -128,19 +132,21 @@ module warp_issue (
     wire [14:0] bundle0_raddr    = i_bundle0[15: 1];
     wire [31:0] bundle0_imm32    = i_bundle0[47:16];
     wire [ 3:0] bundle0_pipeline = i_bundle0[51:48];
-    wire [ 1:0] bundle0_shared   = i_bundle0[53:52];
-    wire [ 7:0] bundle0_xarith   = i_bundle0[61:54];
-    wire [ 6:0] bundle0_xlogic   = i_bundle0[68:62];
-    wire [63:0] bundle0_pc       = i_bundle0[132:69];
+    wire [ 2:0] bundle0_shared   = i_bundle0[54:52];
+    wire [ 8:0] bundle0_xarith   = i_bundle0[63:55];
+    wire [ 6:0] bundle0_xlogic   = i_bundle0[70:64];
+    wire [63:0] bundle0_pc_rdata = i_bundle0[134:71];
+    wire [63:0] bundle0_pc_wdata = i_bundle0[198:135];
 
     wire        bundle1_legal    = i_bundle1[ 0: 0];
     wire [14:0] bundle1_raddr    = i_bundle1[15: 1];
     wire [31:0] bundle1_imm32    = i_bundle1[47:16];
     wire [ 3:0] bundle1_pipeline = i_bundle1[51:48];
-    wire [ 1:0] bundle1_shared   = i_bundle1[53:52];
-    wire [ 7:0] bundle1_xarith   = i_bundle1[61:54];
-    wire [ 6:0] bundle1_xlogic   = i_bundle1[68:62];
-    wire [63:0] bundle1_pc       = i_bundle1[132:69];
+    wire [ 2:0] bundle1_shared   = i_bundle1[54:52];
+    wire [ 8:0] bundle1_xarith   = i_bundle1[63:55];
+    wire [ 6:0] bundle1_xlogic   = i_bundle1[70:64];
+    wire [63:0] bundle1_pc_rdata = i_bundle1[134:71];
+    wire [63:0] bundle1_pc_wdata = i_bundle1[198:135];
 
     // immediates are at most 32 bits in the instruction (actually less),
     // so sign extend them here to 64 bits
@@ -187,18 +193,21 @@ module warp_issue (
     wire bundle1_pipe_xdiv   = bundle1_pipeline == `PIPELINE_XDIV;
 
     // switch xarith control signals based on port usage
-    wire [63:0] xarith_imm    = bundle0_dispatch_xarith ? bundle0_imm         : bundle1_imm;
-    wire [63:0] xarith_pc     = bundle0_dispatch_xarith ? bundle0_pc          : bundle1_pc;
-    wire [ 1:0] xarith_opsel  = bundle0_dispatch_xarith ? bundle0_xarith[1:0] : bundle1_xarith[1:0];
-    wire xarith_sub           = bundle0_dispatch_xarith ? bundle0_xarith[2]   : bundle1_xarith[2];
-    wire xarith_unsigned      = bundle0_dispatch_xarith ? bundle0_xarith[3]   : bundle1_xarith[3];
-    wire xarith_cmp_mode      = bundle0_dispatch_xarith ? bundle0_xarith[4]   : bundle1_xarith[4];
-    wire xarith_branch_equal  = bundle0_dispatch_xarith ? bundle0_xarith[5]   : bundle1_xarith[5];
-    wire xarith_branch_invert = bundle0_dispatch_xarith ? bundle0_xarith[6]   : bundle1_xarith[6];
-    wire xarith_word          = bundle0_dispatch_xarith ? bundle0_xarith[7]   : bundle1_xarith[7];
-    wire xarith_op1_sel       = bundle0_dispatch_xarith ? bundle0_shared[0]   : bundle1_shared[0];
-    wire xarith_op2_sel       = bundle0_dispatch_xarith ? bundle0_shared[1]   : bundle1_shared[1];
-    wire [ 4:0] xarith_rd     = bundle0_dispatch_xarith ? bundle0_rd          : bundle1_rd;
+    wire [63:0] xarith_imm      = bundle0_dispatch_xarith ? bundle0_imm         : bundle1_imm;
+    wire [63:0] xarith_pc_rdata = bundle0_dispatch_xarith ? bundle0_pc_rdata    : bundle1_pc_rdata;
+    wire [63:0] xarith_pc_wdata = bundle0_dispatch_xarith ? bundle0_pc_wdata    : bundle1_pc_wdata;
+    wire [ 1:0] xarith_opsel    = bundle0_dispatch_xarith ? bundle0_xarith[1:0] : bundle1_xarith[1:0];
+    wire xarith_sub             = bundle0_dispatch_xarith ? bundle0_xarith[2]   : bundle1_xarith[2];
+    wire xarith_unsigned        = bundle0_dispatch_xarith ? bundle0_xarith[3]   : bundle1_xarith[3];
+    wire xarith_cmp_mode        = bundle0_dispatch_xarith ? bundle0_xarith[4]   : bundle1_xarith[4];
+    wire xarith_branch_en       = bundle0_dispatch_xarith ? bundle0_xarith[5]   : bundle1_xarith[5];
+    wire xarith_branch_equal    = bundle0_dispatch_xarith ? bundle0_xarith[6]   : bundle1_xarith[6];
+    wire xarith_branch_invert   = bundle0_dispatch_xarith ? bundle0_xarith[7]   : bundle1_xarith[7];
+    wire xarith_word            = bundle0_dispatch_xarith ? bundle0_xarith[8]   : bundle1_xarith[8];
+    wire xarith_op1_sel         = bundle0_dispatch_xarith ? bundle0_shared[0]   : bundle1_shared[0];
+    wire xarith_op2_sel         = bundle0_dispatch_xarith ? bundle0_shared[1]   : bundle1_shared[1];
+    wire xarith_rd_wen          = bundle0_dispatch_xarith ? bundle0_shared[2]   : bundle1_shared[2];
+    wire [ 4:0] xarith_rd       = bundle0_dispatch_xarith ? bundle0_rd          : bundle1_rd;
 `ifdef RISCV_FORMAL
     wire        f_valid_xarith;
     wire [63:0] f_order_xarith     = bundle0_dispatch_xarith ? if_order_ch0     : if_order_ch1;
@@ -226,6 +235,7 @@ module warp_issue (
     wire xlogic_word         = bundle0_dispatch_xlogic ? bundle0_xlogic[6]   : bundle1_xlogic[6];
     // NOTE: xlogic_op1_sel is not used in the pipeline so not included
     wire xlogic_op2_sel      = bundle0_dispatch_xlogic ? bundle0_shared[1]   : bundle1_shared[1];
+    wire xlogic_rd_wen       = bundle0_dispatch_xlogic ? bundle0_shared[2]   : bundle1_shared[2];
     wire [ 4:0] xlogic_rd    = bundle0_dispatch_xlogic ? bundle0_rd          : bundle1_rd;
 `ifdef RISCV_FORMAL
     wire        f_valid_xlogic;
@@ -366,22 +376,27 @@ module warp_issue (
     end
 
     reg        r_xarith_banksel, r_xarith_op1_sel, r_xarith_op2_sel;
+    reg        r_xarith_rd_wen;
     reg [63:0] r_xarith_imm;
-    reg [63:0] r_xarith_pc;
+    reg [63:0] r_xarith_pc_rdata, r_xarith_pc_wdata;
     reg [ 1:0] r_xarith_opsel;
     reg        r_xarith_sub, r_xarith_unsigned, r_xarith_cmp_mode;
-    reg        r_xarith_branch_equal, r_xarith_branch_invert;
+    reg        r_xarith_branch_en, r_xarith_branch_equal, r_xarith_branch_invert;
     reg        r_xarith_word, r_xarith_valid;
     reg [ 4:0] r_xarith_rd;
     always @(posedge i_clk, negedge i_rst_n) begin
         if (!i_rst_n) begin
+            r_xarith_op1_sel       <= 1'b0;
             r_xarith_op2_sel       <= 1'b0;
+            r_xarith_rd_wen        <= 1'b0;
             r_xarith_imm           <= 64'h0;
-            r_xarith_pc            <= 39'h0;
+            r_xarith_pc_rdata      <= 64'h0;
+            r_xarith_pc_wdata      <= 64'h0;
             r_xarith_opsel         <= 2'b00;
             r_xarith_sub           <= 1'b0;
             r_xarith_unsigned      <= 1'b0;
             r_xarith_cmp_mode      <= 1'b0;
+            r_xarith_branch_en     <= 1'b0;
             r_xarith_branch_equal  <= 1'b0;
             r_xarith_branch_invert <= 1'b0;
             r_xarith_word          <= 1'b0;
@@ -390,12 +405,15 @@ module warp_issue (
         end else begin
             r_xarith_op1_sel       <= xarith_op1_sel;
             r_xarith_op2_sel       <= xarith_op2_sel;
+            r_xarith_rd_wen        <= xarith_rd_wen;
             r_xarith_imm           <= xarith_imm;
-            r_xarith_pc            <= xarith_pc;
+            r_xarith_pc_rdata      <= xarith_pc_rdata;
+            r_xarith_pc_wdata      <= xarith_pc_wdata;
             r_xarith_opsel         <= xarith_opsel;
             r_xarith_sub           <= xarith_sub;
             r_xarith_unsigned      <= xarith_unsigned;
             r_xarith_cmp_mode      <= xarith_cmp_mode;
+            r_xarith_branch_en     <= xarith_branch_en;
             r_xarith_branch_equal  <= xarith_branch_equal;
             r_xarith_branch_invert <= xarith_branch_invert;
             r_xarith_word          <= xarith_word;
@@ -459,6 +477,7 @@ module warp_issue (
 `endif
 
     reg        r_xlogic_banksel, r_xlogic_op2_sel;
+    reg        r_xlogic_rd_wen;
     reg [63:0] r_xlogic_imm;
     reg [ 2:0] r_xlogic_opsel;
     reg        r_xlogic_invert, r_xlogic_word, r_xlogic_valid;
@@ -467,6 +486,7 @@ module warp_issue (
     always @(posedge i_clk, negedge i_rst_n) begin
         if (!i_rst_n) begin
             r_xlogic_op2_sel <= 1'b0;
+            r_xlogic_rd_wen  <= 1'b0;
             r_xlogic_imm     <= 64'h0;
             r_xlogic_opsel   <= 3'b000;
             r_xlogic_invert  <= 1'b0;
@@ -476,6 +496,7 @@ module warp_issue (
             r_xlogic_rd      <= 5'h0;
         end else begin
             r_xlogic_op2_sel <= xlogic_op2_sel;
+            r_xlogic_rd_wen  <= xlogic_rd_wen;
             r_xlogic_imm     <= xlogic_imm;
             r_xlogic_opsel   <= xlogic_opsel;
             r_xlogic_invert  <= xlogic_invert;
@@ -541,12 +562,15 @@ module warp_issue (
     assign o_xarith_banksel       = r_xarith_banksel;
     assign o_xarith_op1_sel       = r_xarith_op1_sel;
     assign o_xarith_op2_sel       = r_xarith_op2_sel;
+    assign o_xarith_rd_wen        = r_xarith_rd_wen;
     assign o_xarith_imm           = r_xarith_imm;
-    assign o_xarith_pc            = r_xarith_pc;
+    assign o_xarith_pc_rdata      = r_xarith_pc_rdata;
+    assign o_xarith_pc_wdata      = r_xarith_pc_wdata;
     assign o_xarith_opsel         = r_xarith_opsel;
     assign o_xarith_sub           = r_xarith_sub;
     assign o_xarith_unsigned      = r_xarith_unsigned;
     assign o_xarith_cmp_mode      = r_xarith_cmp_mode;
+    assign o_xarith_branch_en     = r_xarith_branch_en;
     assign o_xarith_branch_equal  = r_xarith_branch_equal;
     assign o_xarith_branch_invert = r_xarith_branch_invert;
     assign o_xarith_word          = r_xarith_word;
@@ -556,6 +580,7 @@ module warp_issue (
     assign o_xlogic_banksel = r_xlogic_banksel;
     assign o_xlogic_op1_sel = r_xlogic_op1_sel;
     assign o_xlogic_op2_sel = r_xlogic_op2_sel;
+    assign o_xlogic_rd_wen  = r_xlogic_rd_wen;
     assign o_xlogic_imm     = r_xlogic_imm;
     assign o_xlogic_opsel   = r_xlogic_opsel;
     assign o_xlogic_invert  = r_xlogic_invert;

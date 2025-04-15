@@ -30,8 +30,10 @@ module warp_fetch #(
     output wire [63:0] o_imem_raddr,
     input  wire        i_imem_valid,
     input  wire [63:0] i_imem_rdata,
-    // input  wire [63:0] i_branch_target,
-    // input  wire        i_branch_valid,
+    // when asserted, branch_target contains the result of a branch
+    // instruction target calculated by an execution unit
+    input  wire        i_branch_valid,
+    input  wire [63:0] i_branch_target,
     // fetch outputs zero or two instructions per clock cycle,
     // if the instructions are 16 bit, only the lower 16 bits
     // of o_inst[01] are valid, specified by o_compressed.
@@ -53,8 +55,10 @@ module warp_fetch #(
 `endif
     output wire [31:0] o_inst0,
     output wire [31:0] o_inst1,
-    output wire [63:0] o_inst0_pc,
-    output wire [63:0] o_inst1_pc,
+    output wire [63:0] o_inst0_pc_rdata,
+    output wire [63:0] o_inst0_pc_wdata,
+    output wire [63:0] o_inst1_pc_rdata,
+    output wire [63:0] o_inst1_pc_wdata,
     output wire [ 1:0] o_compressed
 );
     reg [63:0] pc, next_pc;
@@ -72,9 +76,9 @@ module warp_fetch #(
     wire [31:0] inst0 = i_imem_rdata[31:0];
     wire [31:0] inst1 = compressed[0] ? i_imem_rdata[47:16] : i_imem_rdata[63:32];
 
-    wire [1:0] branch;
+    (* keep *) wire [1:0] branch;
     warp_predecode predecode [1:0] (
-        .i_inst({inst0, inst1}), .i_compressed(compressed),
+        .i_inst({inst1, inst0}), .i_compressed(compressed),
         .o_branch(branch)
     );
 
@@ -104,13 +108,24 @@ module warp_fetch #(
         endcase
     end
 
+    // if a branch instruction is encountered, the fetch stage stalls
+    // until it receives a branch target from the execution units
+    reg branch_stall;
+    always @(posedge i_clk, negedge i_rst_n) begin
+        if (!i_rst_n)
+            branch_stall <= 1'b0;
+        else if ((branch[0] || branch[1]) && transmit)
+            branch_stall <= 1'b1;
+        else if (i_branch_valid)
+            branch_stall <= 1'b0;
+    end
+
     // because the fetch stalls by requesting the same instruction
     // from cache, an untransmitted valid instruction will continue
     // to be valid on the next cycle without latching
-    wire output_valid = i_imem_valid;
+    wire output_valid = i_imem_valid && !branch_stall;
     wire transmit = output_valid && i_output_ready;
 
-    // FIXME: implement branching
     always @(*) begin
         // if output is valid and decode is ready to accept,
         // advance the program counter according to the length
@@ -119,6 +134,8 @@ module warp_fetch #(
             next_pc = advance_pc;
         // otherwise we have stalled for one reason or another
         // (waiting on cache, decode not ready)
+        else if (branch_stall && i_branch_valid)
+            next_pc = i_branch_target;
         else
             next_pc = pc;
     end
@@ -135,9 +152,19 @@ module warp_fetch #(
 
     wire init = !init_edge[1] && init_edge[0];
 
+    // read from memory in three cases:
+    // * once on init (first clock, triggered by edge detector)
+    // * valid data at output (not waiting on outstanding mem transaction)
+    //   and not stalling on branch
+    // * branch target resolved and time to resume reading
     // read from imem once on init (first clock), and then every time
     // there is valid data output so we can read next
-    wire imem_ren = init || output_valid;
+    wire imem_ren = init || (output_valid && !branch[0] && !branch[1]) || i_branch_valid;
+
+    wire [63:0] inst0_pc_rdata = pc;
+    wire [63:0] inst0_pc_wdata = compressed[0] ? (pc + 64'h2) : (pc + 64'h4);
+    wire [63:0] inst1_pc_rdata = inst0_pc_wdata;
+    wire [63:0] inst1_pc_wdata = next_pc;
 
     // request the next pc address from the cache, which
     // automatically handles stalling by re-fetching the
@@ -153,12 +180,14 @@ module warp_fetch #(
     assign o_output_valid = output_valid;
     assign o_inst0 = inst0;
     assign o_inst1 = count ? inst1 : `CANONICAL_NOP;
-    assign o_inst0_pc = pc;
+    assign o_inst0_pc_rdata = inst0_pc_rdata;
+    assign o_inst0_pc_wdata = inst0_pc_wdata;
     // TODO: since auipc is currently the only instruction that uses
     // the pc and it is only ever retired on channel 0, we haven't
     // formally verified either this statement or the downstream datapath
     // for inst1_pc, should test (or maybe we don't need it and should remove)
-    assign o_inst1_pc = compressed[0] ? (pc + 64'h2) : (pc + 64'h4);
+    assign o_inst1_pc_rdata = inst1_pc_rdata;
+    assign o_inst1_pc_wdata = inst1_pc_wdata;
     assign o_compressed = {count ? compressed[1] : 1'b0, compressed[0]};
 
 `ifdef RISCV_FORMAL
@@ -178,8 +207,8 @@ module warp_fetch #(
     assign of_intr_ch0  = 1'b0;
     assign of_mode_ch0  = 2'h3; // machine mode (M)
     assign of_ixl_ch0   = 2'h2; // 64 bits
-    assign of_pc_rdata_ch0 = pc;
-    assign of_pc_wdata_ch0 = count ? of_pc_rdata_ch1 : next_pc;
+    assign of_pc_rdata_ch0 = inst0_pc_rdata;
+    assign of_pc_wdata_ch0 = inst0_pc_wdata;
 
     assign of_valid_ch1 = output_valid & count;
     assign of_order_ch1 = f_order + 64'h1;
@@ -189,8 +218,8 @@ module warp_fetch #(
     assign of_intr_ch1  = 1'b0;
     assign of_mode_ch1  = 2'h3; // machine mode (M)
     assign of_ixl_ch1   = 2'h2; // 64 bits
-    assign of_pc_rdata_ch1 = compressed[0] ? (pc + 64'h2) : (pc + 64'h4);
-    assign of_pc_wdata_ch1 = next_pc;
+    assign of_pc_rdata_ch1 = inst1_pc_rdata;
+    assign of_pc_wdata_ch1 = inst1_pc_wdata;
 `endif
 
 `ifdef WARP_FORMAL
@@ -206,6 +235,7 @@ module warp_fetch #(
     always @(*) begin
         if (!i_rst_n) begin
             assume (!i_imem_valid);
+            assume (!i_branch_valid);
 
             assert (!o_output_valid);
             assert (!o_imem_ren);
@@ -222,6 +252,8 @@ module warp_fetch #(
             assume ($stable(i_imem_valid));
             assume ($stable(i_imem_rdata));
             assume ($stable(i_output_ready));
+            assume ($stable(i_branch_valid));
+            assume ($stable(i_branch_target));
         end
 
         if (f_past_valid && i_rst_n && !$rose(i_clk)) begin
@@ -242,6 +274,16 @@ module warp_fetch #(
             f_mem_outstanding <= 1'b1;
         else if (i_imem_valid)
             f_mem_outstanding <= 1'b0;
+    end
+
+    reg f_branch_outstanding;
+    always @(posedge i_clk, negedge i_rst_n) begin
+        if (!i_rst_n)
+            f_branch_outstanding <= 1'b0;
+        else if (branch[0] && transmit)
+            f_branch_outstanding <= 1'b1;
+        else if (i_branch_valid)
+            f_branch_outstanding <= 1'b0;
     end
 
     // FIXME:ideally, the formal needs to know the behavior of the imem
@@ -284,6 +326,10 @@ module warp_fetch #(
         // we should not expect valid output right after reset
         if (f_past_valid && !$past(i_rst_n))
             assert (!o_output_valid);
+
+        // branch will never respond unless fetch is stalled
+        if (i_branch_valid)
+            assume (f_branch_outstanding);
 
         if (i_rst_n) begin
             // downstream backpressure should not drop instructions:
@@ -362,7 +408,7 @@ module warp_fetch_old #(
 
     wire [1:0] branch;
     warp_predecode predecode [1:0] (
-        .i_inst({inst0, inst1}), .i_compressed(compressed),
+        .i_inst({inst1, inst0}), .i_compressed(compressed),
         .o_branch(branch)
     );
 
