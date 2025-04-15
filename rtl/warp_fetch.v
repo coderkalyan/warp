@@ -90,12 +90,6 @@ module warp_fetch #(
     always @(*) begin
         advance_pc = 64'hx;
 
-        // FIXME: why does riscv formal not like the compressed
-        // even when disabled for decoding
-        // if (branch[0])
-        //     advance_pc = pc + 64'h4;
-        // else
-        //     advance_pc = pc + 64'h8;
         casez ({branch[0], compressed})
             3'b000: advance_pc = pc + 64'h8;
             3'b001,
@@ -156,7 +150,11 @@ module warp_fetch #(
     assign o_inst0 = inst0;
     assign o_inst1 = count ? inst1 : `CANONICAL_NOP;
     assign o_inst0_pc = pc;
-    assign o_inst1_pc = pc + 64'h4; // + 39'd4;
+    // TODO: since auipc is currently the only instruction that uses
+    // the pc and it is only ever retired on channel 0, we haven't
+    // formally verified either this statement or the downstream datapath
+    // for inst1_pc, should test (or maybe we don't need it and should remove)
+    assign o_inst1_pc = compressed[0] ? (pc + 64'h2) : (pc + 64'h4);
     assign o_compressed = {count ? compressed[1] : 1'b0, compressed[0]};
 
 `ifdef RISCV_FORMAL
@@ -187,9 +185,7 @@ module warp_fetch #(
     assign of_intr_ch1  = 1'b0;
     assign of_mode_ch1  = 2'h3; // machine mode (M)
     assign of_ixl_ch1   = 2'h2; // 64 bits
-    // FIXME: riscv formal doesn't like the compressed advance
-    assign of_pc_rdata_ch1 = compressed ? (pc + 64'h2) : (pc + 64'h4);
-    // assign of_pc_rdata_ch1 = pc + 64'h4;
+    assign of_pc_rdata_ch1 = compressed[0] ? (pc + 64'h2) : (pc + 64'h4);
     assign of_pc_wdata_ch1 = next_pc;
 `endif
 
