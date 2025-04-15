@@ -592,19 +592,13 @@ module warp_udecode (
                 xlogic_word = 1'b1;
             end
             op_branch: begin
-                case (funct3)
-                    // beq
-                    3'b000: begin
-                        legal = 1'b1;
-                        pipeline = `PIPELINE_XARITH;
-                        xarith_sub = 1'b0;
-                        xarith_unsigned = 1'b0;
-                        xarith_branch_equal = 1'b1;
-                        xarith_branch_invert = 1'b0;
-                    end
-                endcase
-
+                legal = (funct3 != 3'b010) && (funct3 != 3'b011);
+                pipeline = `PIPELINE_XARITH;
                 xarith_branch_en = 1'b1;
+                xarith_branch_equal = !funct3[2];
+                xarith_branch_invert = funct3[0];
+                xarith_sub = funct3[2];
+                xarith_unsigned = funct3[1];
             end
         endcase
     end
