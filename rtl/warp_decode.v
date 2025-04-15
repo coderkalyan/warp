@@ -15,6 +15,8 @@ module warp_decode (
     input  wire        i_input_valid,
     input  wire [31:0] i_inst0,
     input  wire [31:0] i_inst1,
+    input  wire [38:0] i_inst0_pc,
+    input  wire [38:0] i_inst1_pc,
     input  wire [1:0]  i_compressed,
 `ifdef RISCV_FORMAL
     `RVFI_METADATA_INPUTS(_ch0),
@@ -39,6 +41,7 @@ module warp_decode (
     output wire [`BUNDLE_SIZE - 1:0] o_bundle1
 );
     wire [31:0] decode_inst     [1:0];
+    wire [38:0] decode_pc       [1:0];
     wire        decode_legal    [1:0];
     wire [14:0] decode_raddr    [1:0];
     wire [31:0] decode_imm      [1:0]; // TODO: consider reducing imm size by doing signext later
@@ -51,6 +54,8 @@ module warp_decode (
     // can't assign both of these inline due to verilog syntax limitations
     assign decode_inst[0] = i_inst0;
     assign decode_inst[1] = i_inst1;
+    assign decode_pc[0]   = i_inst0_pc;
+    assign decode_pc[1]   = i_inst1_pc;
 
     genvar i;
     generate
@@ -73,6 +78,7 @@ module warp_decode (
             assign decode_bundle[i][53:52] = decode_shared[i];
             assign decode_bundle[i][61:54] = decode_xarith[i];
             assign decode_bundle[i][68:62] = decode_xlogic[i];
+            assign decode_bundle[i][107:69] = decode_pc[i];
         end
     endgenerate
 
@@ -441,6 +447,7 @@ module warp_udecode (
             op_auipc: begin
                 legal = 1'b1;
                 pipeline = `PIPELINE_XARITH;
+                op1_sel = 1'b1;
                 op2_sel = 1'b1;
                 xarith_opsel = `XARITH_OP_ADD;
                 xarith_sub = 1'b0;

@@ -96,6 +96,6 @@
 	output wire [63:0] of_rd_wdata``i
 
 `define CANONICAL_NOP 32'h00000013
-`define BUNDLE_SIZE 69
+`define BUNDLE_SIZE 108
 
 `endif /* WARP_DEFINES */

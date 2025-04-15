@@ -49,9 +49,11 @@ module warp_fetch #(
 `endif
     output wire [31:0] o_inst0,
     output wire [31:0] o_inst1,
+    output wire [38:0] o_inst0_pc,
+    output wire [38:0] o_inst1_pc,
     output wire [ 1:0] o_compressed
 );
-    reg [39:0] pc, next_pc;
+    reg [38:0] pc, next_pc;
     always @(posedge i_clk, negedge i_rst_n) begin
         if (!i_rst_n)
             pc <= RESET_ADDR;
@@ -153,6 +155,8 @@ module warp_fetch #(
     assign o_output_valid = output_valid;
     assign o_inst0 = inst0;
     assign o_inst1 = count ? inst1 : `CANONICAL_NOP;
+    assign o_inst0_pc = pc;
+    assign o_inst1_pc = pc + 64'h4; // + 39'd4;
     assign o_compressed = {count ? compressed[1] : 1'b0, compressed[0]};
 
 `ifdef RISCV_FORMAL

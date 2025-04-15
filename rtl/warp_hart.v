@@ -21,6 +21,7 @@ module warp_hart #(
     wire [63:0] imem_rdata;
     wire        fetch_valid, decode_ready;
     wire [31:0] fetch_inst0, fetch_inst1;
+    wire [38:0] fetch_inst0_pc, fetch_inst1_pc;
     wire [ 1:0] fetch_compressed;
 `ifdef RISCV_FORMAL
     wire        f_fetch_valid0;
@@ -64,6 +65,7 @@ module warp_hart #(
         .of_pc_wdata_ch1(f_fetch_pc_wdata1),
 `endif
         .o_inst0(fetch_inst0), .o_inst1(fetch_inst1),
+        .o_inst0_pc(fetch_inst0_pc), .o_inst1_pc(fetch_inst1_pc),
         .o_compressed(fetch_compressed)
     );
 
@@ -100,6 +102,7 @@ module warp_hart #(
         .i_clk(i_clk), .i_rst_n(i_rst_n),
         .o_input_ready(decode_ready), .i_input_valid(fetch_valid),
         .i_inst0(fetch_inst0), .i_inst1(fetch_inst1),
+        .i_inst0_pc(fetch_inst0_pc), .i_inst1_pc(fetch_inst1_pc),
         .i_compressed(fetch_compressed),
 `ifdef RISCV_FORMAL
         .if_valid_ch0(f_fetch_valid0),
@@ -163,8 +166,9 @@ module warp_hart #(
     wire [ 4:0] rs1_addr, rs2_addr, rs3_addr, rs4_addr;
     wire        xarith_valid, xarith_ready;
     wire [ 1:0] xarith_opsel;
-    wire        xarith_banksel, xarith_op2_sel;
+    wire        xarith_banksel, xarith_op1_sel, xarith_op2_sel;
     wire [63:0] xarith_imm;
+    wire [38:0] xarith_pc;
     wire        xarith_sub, xarith_unsigned, xarith_cmp_mode, xarith_branch_equal;
     wire        xarith_branch_invert, xarith_word;
     wire [ 4:0] xarith_issue_rd;
@@ -273,8 +277,10 @@ module warp_hart #(
         .o_rs3_addr(rs3_addr),
         .o_rs4_addr(rs4_addr),
         .o_xarith_banksel(xarith_banksel),
+        .o_xarith_op1_sel(xarith_op1_sel),
         .o_xarith_op2_sel(xarith_op2_sel),
         .o_xarith_imm(xarith_imm),
+        .o_xarith_pc(xarith_pc),
         .o_xarith_opsel(xarith_opsel),
         .o_xarith_sub(xarith_sub),
         .o_xarith_unsigned(xarith_unsigned),
@@ -339,7 +345,7 @@ module warp_hart #(
     assign xarith_ready = 1'b1;
     wire [63:0] xarith_rs1 = r_xarith_banksel ? rs3_rdata : rs1_rdata;
     wire [63:0] xarith_rs2 = r_xarith_banksel ? rs4_rdata : rs2_rdata;
-    wire [63:0] xarith_op1 = xarith_rs1;
+    wire [63:0] xarith_op1 = xarith_op1_sel ? xarith_pc  : xarith_rs1;
     wire [63:0] xarith_op2 = xarith_op2_sel ? xarith_imm : xarith_rs2;
     wire [63:0] xarith_result;
     wire        xarith_branch, xarith_wen;
