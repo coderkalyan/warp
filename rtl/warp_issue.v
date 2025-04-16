@@ -36,11 +36,10 @@ module warp_issue (
     output wire [63:0] o_xarith_imm,
     output wire [63:0] o_xarith_pc_rdata,
     output wire [63:0] o_xarith_pc_wdata,
-    output wire [ 1:0] o_xarith_opsel,
+    output wire [ 2:0] o_xarith_opsel,
     output wire        o_xarith_sub,
     output wire        o_xarith_unsigned,
     output wire        o_xarith_cmp_mode,
-    output wire        o_xarith_branch_en,
     output wire        o_xarith_branch_equal,
     output wire        o_xarith_branch_invert,
     output wire        o_xarith_word,
@@ -196,11 +195,10 @@ module warp_issue (
     wire [63:0] xarith_imm      = bundle0_dispatch_xarith ? bundle0_imm         : bundle1_imm;
     wire [63:0] xarith_pc_rdata = bundle0_dispatch_xarith ? bundle0_pc_rdata    : bundle1_pc_rdata;
     wire [63:0] xarith_pc_wdata = bundle0_dispatch_xarith ? bundle0_pc_wdata    : bundle1_pc_wdata;
-    wire [ 1:0] xarith_opsel    = bundle0_dispatch_xarith ? bundle0_xarith[1:0] : bundle1_xarith[1:0];
-    wire xarith_sub             = bundle0_dispatch_xarith ? bundle0_xarith[2]   : bundle1_xarith[2];
-    wire xarith_unsigned        = bundle0_dispatch_xarith ? bundle0_xarith[3]   : bundle1_xarith[3];
-    wire xarith_cmp_mode        = bundle0_dispatch_xarith ? bundle0_xarith[4]   : bundle1_xarith[4];
-    wire xarith_branch_en       = bundle0_dispatch_xarith ? bundle0_xarith[5]   : bundle1_xarith[5];
+    wire [ 2:0] xarith_opsel    = bundle0_dispatch_xarith ? bundle0_xarith[2:0] : bundle1_xarith[2:0];
+    wire xarith_sub             = bundle0_dispatch_xarith ? bundle0_xarith[3]   : bundle1_xarith[3];
+    wire xarith_unsigned        = bundle0_dispatch_xarith ? bundle0_xarith[4]   : bundle1_xarith[4];
+    wire xarith_cmp_mode        = bundle0_dispatch_xarith ? bundle0_xarith[5]   : bundle1_xarith[5];
     wire xarith_branch_equal    = bundle0_dispatch_xarith ? bundle0_xarith[6]   : bundle1_xarith[6];
     wire xarith_branch_invert   = bundle0_dispatch_xarith ? bundle0_xarith[7]   : bundle1_xarith[7];
     wire xarith_word            = bundle0_dispatch_xarith ? bundle0_xarith[8]   : bundle1_xarith[8];
@@ -379,9 +377,9 @@ module warp_issue (
     reg        r_xarith_rd_wen;
     reg [63:0] r_xarith_imm;
     reg [63:0] r_xarith_pc_rdata, r_xarith_pc_wdata;
-    reg [ 1:0] r_xarith_opsel;
+    reg [ 2:0] r_xarith_opsel;
     reg        r_xarith_sub, r_xarith_unsigned, r_xarith_cmp_mode;
-    reg        r_xarith_branch_en, r_xarith_branch_equal, r_xarith_branch_invert;
+    reg        r_xarith_branch_equal, r_xarith_branch_invert;
     reg        r_xarith_word, r_xarith_valid;
     reg [ 4:0] r_xarith_rd;
     always @(posedge i_clk, negedge i_rst_n) begin
@@ -396,7 +394,6 @@ module warp_issue (
             r_xarith_sub           <= 1'b0;
             r_xarith_unsigned      <= 1'b0;
             r_xarith_cmp_mode      <= 1'b0;
-            r_xarith_branch_en     <= 1'b0;
             r_xarith_branch_equal  <= 1'b0;
             r_xarith_branch_invert <= 1'b0;
             r_xarith_word          <= 1'b0;
@@ -413,7 +410,6 @@ module warp_issue (
             r_xarith_sub           <= xarith_sub;
             r_xarith_unsigned      <= xarith_unsigned;
             r_xarith_cmp_mode      <= xarith_cmp_mode;
-            r_xarith_branch_en     <= xarith_branch_en;
             r_xarith_branch_equal  <= xarith_branch_equal;
             r_xarith_branch_invert <= xarith_branch_invert;
             r_xarith_word          <= xarith_word;
@@ -570,7 +566,6 @@ module warp_issue (
     assign o_xarith_sub           = r_xarith_sub;
     assign o_xarith_unsigned      = r_xarith_unsigned;
     assign o_xarith_cmp_mode      = r_xarith_cmp_mode;
-    assign o_xarith_branch_en     = r_xarith_branch_en;
     assign o_xarith_branch_equal  = r_xarith_branch_equal;
     assign o_xarith_branch_invert = r_xarith_branch_invert;
     assign o_xarith_word          = r_xarith_word;

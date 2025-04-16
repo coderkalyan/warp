@@ -288,11 +288,10 @@ module warp_udecode (
     // [1]   = op2_sel
     // [2]   = rd_wen
     output wire [2:0]  o_shared,
-    // [1:0] = opsel
-    // [2]   = sub
-    // [3]   = unsigned
-    // [4]   = cmp_mode
-    // [5]   = branch_en
+    // [2:0] = opsel
+    // [3]   = sub
+    // [4]   = unsigned
+    // [5]   = cmp_mode
     // [6]   = branch_equal
     // [7]   = branch_invert
     // [8]   = word
@@ -362,9 +361,9 @@ module warp_udecode (
     reg       rs1_clear;
     reg       op1_sel, op2_sel, rd_wen;
     // xarith control signals
-    reg [1:0] xarith_opsel;
+    reg [2:0] xarith_opsel;
     reg xarith_sub, xarith_unsigned, xarith_cmp_mode;
-    reg xarith_branch_en, xarith_branch_equal, xarith_branch_invert;
+    reg xarith_branch_equal, xarith_branch_invert;
     reg xarith_word;
     // xlogic control signals
     reg [2:0] xlogic_opsel;
@@ -378,11 +377,10 @@ module warp_udecode (
         op1_sel = 1'b0;
         op2_sel = 1'b0;
         rd_wen = 1'b0;
-        xarith_opsel = 2'b00;
+        xarith_opsel = 3'b000;
         xarith_sub = 1'b0;
         xarith_unsigned = 1'b0;
         xarith_cmp_mode = 1'b0;
-        xarith_branch_en = 1'b0;
         xarith_branch_equal = 1'b0;
         xarith_branch_invert = 1'b0;
         xarith_word = 1'b0;
@@ -594,11 +592,31 @@ module warp_udecode (
             op_branch: begin
                 legal = (funct3 != 3'b010) && (funct3 != 3'b011);
                 pipeline = `PIPELINE_XARITH;
-                xarith_branch_en = 1'b1;
+                xarith_opsel = `XARITH_OP_BRANCH;
                 xarith_branch_equal = !funct3[2];
                 xarith_branch_invert = funct3[0];
                 xarith_sub = funct3[2];
                 xarith_unsigned = funct3[1];
+            end
+            op_jalr: begin
+                legal = 1'b1;
+                pipeline = `PIPELINE_XARITH;
+                op1_sel = 1'b0;
+                op2_sel = 1'b1;
+                rd_wen = 1'b1;
+                xarith_opsel = `XARITH_OP_JALR;
+                xarith_sub = 1'b0;
+                xarith_word = 1'b0;
+            end
+            op_jal: begin
+                legal = 1'b1;
+                pipeline = `PIPELINE_XARITH;
+                op1_sel = 1'b1;
+                op2_sel = 1'b1;
+                rd_wen = 1'b1;
+                xarith_opsel = `XARITH_OP_JAL;
+                xarith_sub = 1'b0;
+                xarith_word = 1'b0;
             end
         endcase
     end
@@ -612,11 +630,10 @@ module warp_udecode (
     assign o_shared[1]   = op2_sel;
     assign o_shared[2]   = rd_wen;
 
-    assign o_xarith[1:0] = xarith_opsel;
-    assign o_xarith[2]   = xarith_sub;
-    assign o_xarith[3]   = xarith_unsigned;
-    assign o_xarith[4]   = xarith_cmp_mode;
-    assign o_xarith[5]   = xarith_branch_en;
+    assign o_xarith[2:0] = xarith_opsel;
+    assign o_xarith[3]   = xarith_sub;
+    assign o_xarith[4]   = xarith_unsigned;
+    assign o_xarith[5]   = xarith_cmp_mode;
     assign o_xarith[6]   = xarith_branch_equal;
     assign o_xarith[7]   = xarith_branch_invert;
     assign o_xarith[8]   = xarith_word;

@@ -11,9 +11,12 @@
 `define PIPELINE_XMULTH 3'h4
 `define PIPELINE_XDIV   3'h5
 
-`define XARITH_OP_ADD 2'h0
-`define XARITH_OP_SLT 2'h1
-`define XARITH_OP_CMP 2'h2
+`define XARITH_OP_ADD    3'h0
+`define XARITH_OP_SLT    3'h1
+`define XARITH_OP_CMP    3'h2
+`define XARITH_OP_BRANCH 3'h3
+`define XARITH_OP_JAL    3'h4
+`define XARITH_OP_JALR   3'h5
 
 `define XLOGIC_OP_AND 3'h0
 `define XLOGIC_OP_OR  3'h1

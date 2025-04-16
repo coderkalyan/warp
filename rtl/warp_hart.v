@@ -108,6 +108,7 @@ module warp_hart #(
         .o_input_ready(decode_ready), .i_input_valid(fetch_valid),
         .i_inst0(fetch_inst0), .i_inst1(fetch_inst1),
         .i_inst0_pc_rdata(fetch_inst0_pc_rdata), .i_inst1_pc_rdata(fetch_inst1_pc_rdata),
+        .i_inst0_pc_wdata(fetch_inst0_pc_wdata), .i_inst1_pc_wdata(fetch_inst1_pc_wdata),
         .i_compressed(fetch_compressed),
 `ifdef RISCV_FORMAL
         .if_valid_ch0(f_fetch_valid0),
@@ -170,13 +171,13 @@ module warp_hart #(
 
     wire [ 4:0] rs1_addr, rs2_addr, rs3_addr, rs4_addr;
     wire        xarith_valid, xarith_ready;
-    wire [ 1:0] xarith_opsel;
+    wire [ 2:0] xarith_opsel;
     wire        xarith_banksel, xarith_op1_sel, xarith_op2_sel;
     wire        xarith_rd_wen;
     wire [63:0] xarith_imm;
     wire [63:0] xarith_pc_rdata, xarith_pc_wdata;
     wire        xarith_sub, xarith_unsigned, xarith_cmp_mode, xarith_branch_equal;
-    wire        xarith_branch_en, xarith_branch_invert, xarith_word;
+    wire        xarith_branch_invert, xarith_word;
     wire [ 4:0] xarith_issue_rd;
     wire        xlogic_valid, xlogic_ready;
     wire [ 2:0] xlogic_opsel;
@@ -294,7 +295,6 @@ module warp_hart #(
         .o_xarith_sub(xarith_sub),
         .o_xarith_unsigned(xarith_unsigned),
         .o_xarith_cmp_mode(xarith_cmp_mode),
-        .o_xarith_branch_en(xarith_branch_en),
         .o_xarith_branch_equal(xarith_branch_equal),
         .o_xarith_branch_invert(xarith_branch_invert),
         .o_xarith_word(xarith_word),
@@ -394,7 +394,6 @@ module warp_hart #(
         .i_sub(xarith_sub),
         .i_unsigned(xarith_unsigned),
         .i_cmp_mode(xarith_cmp_mode),
-        .i_branch_en(xarith_branch_en),
         .i_branch_equal(xarith_branch_equal),
         .i_branch_invert(xarith_branch_invert),
         .i_word(xarith_word),
@@ -440,14 +439,12 @@ module warp_hart #(
     );
 
     // NOTE: if the xarith unit takes more than 1 cycle this will break
-    reg        r_xarith_rd_wen, r_xarith_branch_en;
+    reg        r_xarith_rd_wen;
     always @(posedge i_clk, negedge i_rst_n) begin
         if (!i_rst_n) begin
             r_xarith_rd_wen <= 1'b0;
-            r_xarith_branch_en <= 1'b0;
         end else begin
             r_xarith_rd_wen <= xarith_rd_wen;
-            r_xarith_branch_en <= xarith_branch_en;
         end
     end
 

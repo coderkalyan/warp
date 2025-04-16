@@ -1,7 +1,7 @@
 import math
 
 pipelines = ["xarith", "xlogic", "xshift", "xmultl", "xmulth", "xdiv"]
-xarith_ops = ["add", "slt", "cmp"]
+xarith_ops = ["add", "slt", "cmp", "branch", "jal", "jalr"]
 xlogic_ops = ["and", "or", "xor", "shf", "sla", "clz", "ctz", "pop"]
 ahb_htrans = ["idle", "busy", "nonseq", "seq"]
 

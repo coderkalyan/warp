@@ -34,7 +34,8 @@ module warp_xarith (
     // `XARITH_OP_ADD: o_result = i_op1 +/- i_op2
     // `XARITH_OP_SLT: o_result = (i_op1 < i_op2) ? 1'b1 : 1'b0
     // `XARITH_OP_CMP: o_result = min/max(i_op1, i_op2)
-    input  wire [ 1:0] i_opsel,
+    // `XARITH_OP_BRANCH: o_result = undefined, branch calculation enabled
+    input  wire [ 2:0] i_opsel,
     // subtract mode: when asserted, negate i_op2 before adding
     // only used for OP_ADD
     input  wire        i_sub,
@@ -44,9 +45,6 @@ module warp_xarith (
     // comparison mode: when asserted, min, otherwise max
     // only used for OP_CMP
     input  wire        i_cmp_mode,
-    // if asserted, o_branch will contain the result of the branch
-    // calculation. otherwise o_branch will always be deasserted
-    input  wire        i_branch_en,
     // if asserted, branch resolution compares (in)equality
     // if not, compares less than (unsigned)
     input  wire        i_branch_equal,
@@ -106,28 +104,52 @@ module warp_xarith (
 
     // branch
     wire eq = i_op1 == i_op2;
-    (* keep *) wire branch = i_branch_en && ((i_branch_equal ? eq : slt) ^ i_branch_invert);
+    wire branch_en = (i_opsel == `XARITH_OP_BRANCH) || (i_opsel == `XARITH_OP_JAL) || (i_opsel == `XARITH_OP_JALR);
+    (* keep *) wire branch = branch_en && ((i_branch_equal ? eq : slt) ^ i_branch_invert);
 
     reg [63:0] result;
     always @(*) begin
         result = 64'hx;
 
         case (i_opsel)
-            `XARITH_OP_ADD: result = add_result;
-            `XARITH_OP_SLT: result = slt_result;
-            `XARITH_OP_CMP: result = cmp_result;
+            `XARITH_OP_ADD: result  = add_result;
+            `XARITH_OP_SLT: result  = slt_result;
+            `XARITH_OP_CMP: result  = cmp_result;
+            `XARITH_OP_JAL: result  = i_pc_wdata;
+            `XARITH_OP_JALR: result = i_pc_wdata;
             default: result = 64'hx;
         endcase
     end
 
     wire [63:0] branch_address = i_pc_rdata + i_branch_offset;
-    wire [63:0] branch_target  = branch ? branch_address : i_pc_wdata;
+
+    reg [63:0] branch_target;
+    always @(*) begin
+        branch_target = 64'hx;
+        case (i_opsel)
+            `XARITH_OP_BRANCH: branch_target = branch ? branch_address : i_pc_wdata;
+            `XARITH_OP_JAL:    branch_target = add_result;
+            `XARITH_OP_JALR:   branch_target = {add_result[63:1], 1'b0};
+        endcase
+    end
 
 `ifdef RISCV_FORMAL
     // the formal interface calculates essentially the same branch target
     // address but based on the formal pc data, which should be equivalent
+    // FIXME: this is doing too much work, we should use the normal
+    // branch_target calculation and also phase out the formal pc data
     wire [63:0] f_branch_address = if_pc_rdata + i_branch_offset;
-    wire [63:0] f_pc_wdata = branch ? f_branch_address : if_pc_wdata;
+    reg [63:0] f_pc_wdata;
+    always @(*) begin
+        f_pc_wdata = if_pc_wdata;
+        if ((i_opsel == `XARITH_OP_BRANCH) && branch)
+            f_pc_wdata = f_branch_address;
+        else if (i_opsel == `XARITH_OP_JAL)
+            f_pc_wdata = add_result;
+        else if (i_opsel == `XARITH_OP_JALR)
+            f_pc_wdata = {add_result[63:1], 1'b0};
+    end
+
     // FIXME: we should probably remove this from the formal interface
     // and put it in the main datapath so we can actually trap on
     // illegal branches (and other illegal instructions)
@@ -136,7 +158,7 @@ module warp_xarith (
     // branch_taken_address but for now we check the whole target (but only
     // for branches)
     // wire f_xarith_trap = f_xarith_trap_tmp || (xarith_branch && branch_taken_address[0]);
-    wire f_trap = if_trap || (i_branch_en && f_pc_wdata[0]);
+    wire f_trap = if_trap || (branch_en && f_pc_wdata[0]);
 `endif
 
     // integer arithmetic is a single cycle synchronous unit
