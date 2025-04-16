@@ -360,18 +360,19 @@ module warp_hart #(
     wire [63:0] xarith_op2 = xarith_op2_sel ? xarith_imm      : xarith_rs2;
     wire [63:0] xarith_result;
     wire        xarith_branch, xarith_result_valid;
+    wire [63:0] xarith_branch_target;
     wire [4:0]  xarith_write_rd;
 `ifdef RISCV_FORMAL
     wire        f_xarith_valid;
     wire [63:0] f_xarith_order;
     wire [31:0] f_xarith_insn;
-    wire        f_xarith_trap_tmp;
+    wire        f_xarith_trap;
     wire        f_xarith_halt;
     wire        f_xarith_intr;
     wire [ 1:0] f_xarith_mode;
     wire [ 1:0] f_xarith_ixl;
     wire [63:0] f_xarith_pc_rdata;
-    wire [63:0] f_xarith_pc_wdata_not_taken;
+    wire [63:0] f_xarith_pc_wdata;
     wire [ 4:0] f_xarith_rs1_addr;
     wire [ 4:0] f_xarith_rs2_addr;
     wire [63:0] f_xarith_rs1_rdata;
@@ -386,6 +387,9 @@ module warp_hart #(
         .i_op1(xarith_op1),
         .i_op2(xarith_op2),
         .i_rd(xarith_issue_rd),
+        .i_pc_rdata(xarith_pc_rdata),
+        .i_pc_wdata(xarith_pc_wdata),
+        .i_branch_offset(xarith_imm),
         .i_opsel(xarith_opsel),
         .i_sub(xarith_sub),
         .i_unsigned(xarith_unsigned),
@@ -414,13 +418,13 @@ module warp_hart #(
         .of_valid       (f_xarith_valid),
         .of_order       (f_xarith_order),
         .of_insn        (f_xarith_insn),
-        .of_trap        (f_xarith_trap_tmp),
+        .of_trap        (f_xarith_trap),
         .of_halt        (f_xarith_halt),
         .of_intr        (f_xarith_intr),
         .of_mode        (f_xarith_mode),
         .of_ixl         (f_xarith_ixl),
         .of_pc_rdata    (f_xarith_pc_rdata),
-        .of_pc_wdata    (f_xarith_pc_wdata_not_taken),
+        .of_pc_wdata    (f_xarith_pc_wdata),
         .of_rs1_addr    (f_xarith_rs1_addr),
         .of_rs2_addr    (f_xarith_rs2_addr),
         .of_rs1_rdata   (f_xarith_rs1_rdata),
@@ -431,45 +435,24 @@ module warp_hart #(
         .o_valid(xarith_result_valid),
         .o_result(xarith_result),
         .o_branch(xarith_branch),
+        .o_branch_target(xarith_branch_target),
         .o_rd(xarith_write_rd)
     );
 
     // NOTE: if the xarith unit takes more than 1 cycle this will break
-    reg [63:0] r_xarith_pc_rdata, r_xarith_pc_wdata;
-    reg [63:0] r_xarith_imm;
     reg        r_xarith_rd_wen, r_xarith_branch_en;
     always @(posedge i_clk, negedge i_rst_n) begin
         if (!i_rst_n) begin
-            r_xarith_pc_rdata <= 64'h0;
-            r_xarith_pc_wdata <= 64'h0;
-            r_xarith_imm <= 64'h0;
             r_xarith_rd_wen <= 1'b0;
             r_xarith_branch_en <= 1'b0;
         end else begin
-            r_xarith_pc_rdata <= xarith_pc_rdata;
-            r_xarith_pc_wdata <= xarith_pc_wdata;
-            r_xarith_imm <= xarith_imm;
             r_xarith_rd_wen <= xarith_rd_wen;
             r_xarith_branch_en <= xarith_branch_en;
         end
     end
 
-    wire [63:0] branch_taken_address = r_xarith_pc_rdata + r_xarith_imm;
     assign branch_valid = xarith_result_valid;
-    assign branch_target = xarith_branch ? branch_taken_address : r_xarith_pc_wdata;
-
-`ifdef RISCV_FORMAL
-    wire [63:0] f_xarith_pc_wdata = xarith_branch ? branch_taken_address : f_xarith_pc_wdata_not_taken;
-    // FIXME: we should probably remove this from the formal interface
-    // and put it in the main datapath so we can actually trap on
-    // illegal branches (and other illegal instructions)
-    // FIXME: once this illegal address trap causes either a real trap or
-    // a halt in fetch, we can change this expression to only use
-    // branch_taken_address but for now we check the whole target (but only
-    // for branches)
-    // wire f_xarith_trap = f_xarith_trap_tmp || (xarith_branch && branch_taken_address[0]);
-    wire f_xarith_trap = f_xarith_trap_tmp || (r_xarith_branch_en && f_xarith_pc_wdata[0]);
-`endif
+    assign branch_target = xarith_branch_target;
 
     reg r_xlogic_banksel;
     always @(posedge i_clk, negedge i_rst_n) begin
@@ -668,7 +651,7 @@ module warp_hart #(
 `endif
 
     // TODO: wen can be merged with write_rd to 0
-    assign inst0_retire = (32'h1 << xarith_write_rd) & {32{xarith_wen}};
+    assign inst0_retire = (32'h1 << xarith_write_rd) & {32{xarith_result_valid}};
     assign inst1_retire = (32'h1 << xlogic_write_rd) & {32{xlogic_wen}};
 endmodule
 

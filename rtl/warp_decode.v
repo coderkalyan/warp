@@ -44,7 +44,7 @@ module warp_decode (
 );
     wire [31:0] decode_inst     [1:0];
     wire [63:0] decode_pc_rdata [1:0];
-    wire [63:0] decode_pc_wdata [1:0];
+    wire [63:0] decode_pc_wdata [1:0]; // TODO: consider delta encoding this relative to rdata
     wire        decode_legal    [1:0];
     wire [14:0] decode_raddr    [1:0];
     wire [31:0] decode_imm      [1:0]; // TODO: consider reducing imm size by doing signext later
@@ -268,7 +268,7 @@ module warp_predecode (
     wire op_cbeqz  = i_inst[1:0] == 2'b01 && i_inst[15:13] == 3'b110;
     wire op_cbnez  = i_inst[1:0] == 2'b01 && i_inst[15:13] == 3'b111;
 
-    wire op_ubranch = op_branch; // || op_jal || op_jalr;
+    wire op_ubranch = op_branch || op_jal || op_jalr;
     wire op_cbranch = 1'b0; // op_cj || op_cjal || op_cjr || op_cjalr || op_cbeqz || op_cbnez;
     wire branch = i_compressed ? op_cbranch : op_ubranch;
 

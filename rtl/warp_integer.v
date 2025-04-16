@@ -21,6 +21,16 @@ module warp_xarith (
     // destination register is passed through the execution unit to track
     // the write back location, but is not used or modified by this unit
     input  wire [ 4:0] i_rd,
+    // pc of current instruction is used to calculate branch target address
+    // when conditional branches and unconditional direct jumps are taken
+    input  wire [63:0] i_pc_rdata,
+    // pc of next instruction is used to calculate branch target address
+    // when conditional branches are not taken as well as link address
+    // for linking jumps (jal, jalr)
+    input  wire [63:0] i_pc_wdata,
+    // for pc-relative branch and jump instructions, this contains the offset
+    // to compute the branch target address
+    input  wire [63:0] i_branch_offset,
     // `XARITH_OP_ADD: o_result = i_op1 +/- i_op2
     // `XARITH_OP_SLT: o_result = (i_op1 < i_op2) ? 1'b1 : 1'b0
     // `XARITH_OP_CMP: o_result = min/max(i_op1, i_op2)
@@ -58,10 +68,21 @@ module warp_xarith (
     `RVFI_REG_OUTPUTS(),
 `endif
     // when asserted, o_result contains the result of the arithmetic
-    // operation issued on the previous cycle
+    // operation issued on the previous cycle and o_branch is asserted
+    // if a branch operation was issued and the branch was taken
     output wire        o_valid,
+    // contains the result of the arithmetic operation issued previous cycle
+    // this includes arithmetic and comparison operations as well as linking
+    // jumps (jal, jalr)
     output wire [63:0] o_result,
+    // if the issued operation is a branch or jump and the branch should be
+    // taken, this signal is asserted
+    // since the branch target is calculated internally, this is primarily
+    // used to verify and update the branch predictor
     output wire        o_branch,
+    // if the issued operation is a branch or jump, this instruction contains
+    // the branch target address (next logical program counter value)
+    output wire [63:0] o_branch_target,
     // the destination register is passed through from i_rd and output in sync
     // with o_valid and o_result. it is not modified internally but is used to
     // determine which register to write to in write back
@@ -99,28 +120,53 @@ module warp_xarith (
         endcase
     end
 
+    wire [63:0] branch_address = i_pc_rdata + i_branch_offset;
+    wire [63:0] branch_target  = branch ? branch_address : i_pc_wdata;
+
+`ifdef RISCV_FORMAL
+    // the formal interface calculates essentially the same branch target
+    // address but based on the formal pc data, which should be equivalent
+    wire [63:0] f_branch_address = if_pc_rdata + i_branch_offset;
+    wire [63:0] f_pc_wdata = branch ? f_branch_address : if_pc_wdata;
+    // FIXME: we should probably remove this from the formal interface
+    // and put it in the main datapath so we can actually trap on
+    // illegal branches (and other illegal instructions)
+    // FIXME: once this illegal address trap causes either a real trap or
+    // a halt in fetch, we can change this expression to only use
+    // branch_taken_address but for now we check the whole target (but only
+    // for branches)
+    // wire f_xarith_trap = f_xarith_trap_tmp || (xarith_branch && branch_taken_address[0]);
+    wire f_trap = if_trap || (i_branch_en && f_pc_wdata[0]);
+`endif
+
+    // integer arithmetic is a single cycle synchronous unit
+    // so register the calculated values one cycle
     reg        r_valid;
     reg [63:0] r_result;
     reg        r_branch;
+    reg [63:0] r_branch_target;
     reg [4:0]  r_rd;
     always @(posedge i_clk, negedge i_rst_n) begin
         if (!i_rst_n) begin
             r_valid <= 1'b0;
             r_result <= 64'h0;
             r_branch <= 1'b0;
+            r_branch_target <= 64'h0;
             r_rd <= 5'd0;
         end else begin
             r_valid <= i_valid;
             r_result <= result;
             r_branch <= branch;
+            r_branch_target <= branch_target;
             r_rd <= i_rd;
         end
     end
 
-    assign o_valid  = r_valid;
-    assign o_branch = r_branch;
-    assign o_result = r_result;
-    assign o_rd     = r_rd;
+    assign o_valid         = r_valid;
+    assign o_result        = r_result;
+    assign o_rd            = r_rd;
+    assign o_branch        = r_branch;
+    assign o_branch_target = r_branch_target;
 
 `ifdef RISCV_FORMAL
     reg        rf_valid;
@@ -161,13 +207,13 @@ module warp_xarith (
             rf_valid       <= if_valid;
             rf_order       <= if_order;
             rf_insn        <= if_insn;
-            rf_trap        <= if_trap;
+            rf_trap        <= f_trap;
             rf_halt        <= if_halt;
             rf_intr        <= if_intr;
             rf_mode        <= if_mode;
             rf_ixl         <= if_ixl;
             rf_pc_rdata    <= if_pc_rdata;
-            rf_pc_wdata    <= if_pc_wdata;
+            rf_pc_wdata    <= f_pc_wdata;
             rf_rs1_addr    <= if_rs1_addr;
             rf_rs2_addr    <= if_rs2_addr;
             rf_rs1_rdata   <= if_rs1_rdata;
