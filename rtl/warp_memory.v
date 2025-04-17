@@ -12,16 +12,16 @@ module warp_icache (
     input  wire        i_clk,
     input  wire        i_rst_n,
     // interface to fetch unit
-    output wire        o_req_ready,
     input  wire        i_req_valid,
-    input  wire [33:0] i_req_raddr,
+    // TODO: this should be reduced to the size of the virtual address space
+    // once virtual memory and supervisor mode have been implemented
+    input  wire [63:0] i_req_raddr,
     output wire        o_res_valid,
-    input  wire        i_res_ready,
     output wire [63:0] i_res_rdata,
     // AHB5 interface (manager) to memory
     input  wire        o_ahb_hclk,
     input  wire        o_ahb_hreset_n,
-    output wire [33:0] o_ahb_haddr,
+    output wire [63:0] o_ahb_haddr,
     output wire [2:0]  o_ahb_hburst,
     output wire        o_ahb_hmastlock,
     output wire [3:0]  o_ahb_hprot,
