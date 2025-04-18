@@ -621,4 +621,130 @@ module warp_issue (
 `endif
 endmodule
 
+// customized dual ported fifo queue used to decouple the execution
+// frontend from the issue stage and backend
+// also performs filtering of incoming nops to avoid wasting downstream
+// issue bandwidth
+module warp_fifo #(
+    parameter WIDTH = 1,
+    parameter LOG_DEPTH = 2,
+    parameter DEPTH = 2 ** LOG_DEPTH,
+) (
+    input  wire               i_clk,
+    input  wire               i_rst_n,
+    // because the frontend cannot partially stall, the fifo accepts either
+    // zero or two instructions per clock cycle (the frontend is free to
+    // pad these with nops which will be filtered out here)
+    // this filtering can cause the fifo to assert full if there is a single
+    // slot remaining
+    output wire               o_full,
+    // i_wen shall not be asserted if o_full is asserted
+    input  wire               i_wen,
+    input  wire [WIDTH - 1:0] i_wdata0,
+    input  wire [WIDTH - 1:0] i_wdata1,
+    // because only filtered instructions are output, the fifo can
+    // read as having 0, 1, or 2 read slots valid
+    // and the issue can choose whether or not it is ready to accept
+    // 0, 1, or 2 new instructions
+    output wire [1:0]         o_occupancy,
+    // i_rcount shall not be greater than o_occupancy
+    input  wire [1:0]         i_rcount,
+    output wire [WIDTH - 1:0] o_rdata0,
+    output wire [WIDTH - 1:0] o_rdata1,
+);
+    reg [WIDTH - 1:0] mem [0:DEPTH - 1];
+    reg [LOG_DEPTH - 1:0] wptr, rptr;
+
+    wire [LOG_DEPTH - 1:0] wptr0 = wptr;
+    wire [LOG_DEPTH - 1:0] wptr1 = wptr + 1;
+    always @(posedge i_clk) begin
+        if (i_wen) begin
+            mem[wptr0] <= i_wdata0;
+            mem[wptr1] <= i_wdata1;
+        end
+    end
+
+    reg [WIDTH - 1:0] rdata0, rdata1;
+    wire [LOG_DEPTH - 1:0] rptr0 = rptr;
+    wire [LOG_DEPTH - 1:0] rptr1 = rptr + 1;
+    always @(posedge i_clk) begin
+        // we can unconditionally "read" two values from mem
+        // as long as ptr isn't incremented incorrectly
+        rdata0 <= mem[rptr0];
+        rdata1 <= mem[rptr1];
+    end
+
+    always @(posedge i_clk, negedge i_rst_n) begin
+        if (!i_rst_n)
+            wptr <= 0;
+        else if (i_wen)
+            wptr <= wptr + 2;
+    end
+
+    always @(posedge i_clk, negedge i_rst_n) begin
+        if (!i_rst_n)
+            rptr <= 0;
+        else
+            rptr <= rptr + i_rcount;
+    end
+
+    wire signed [LOG_DEPTH - 1:0] delta = $signed(wptr) - $signed(rptr);
+    wire [LOG_DEPTH - 1:0] occupancy = $signed({delta[LOG_DEPTH - 1], delta}) + DEPTH;
+
+    assign o_full = occupancy == (DEPTH - 1);
+    assign o_occupancy = (occupancy > 2'h2) ? 2'h2 : occupancy[1:0];
+    assign o_rdata0 = rdata0;
+    assign o_rdata1 = rdata1;
+
+`ifdef WARP_FORMAL
+    reg f_past_valid;
+    initial f_past_valid <= 1'b0;
+    always @(posedge i_clk) f_past_valid <= 1'b1;
+
+    initial assume (!i_rst_n);
+    initial assume (!i_clk);
+
+    always @(*) begin
+        if (!i_rst_n) begin
+            assume (!i_wen);
+            assume (i_rcount == 0);
+            assert (o_occupancy == 2'h0);
+            assert (!o_full);
+        end
+    end
+
+    always @(posedge i_clk) begin
+        if (i_rst_n) begin
+            // illegal to write to full fifo
+            if (o_full)
+                assume (!i_wen);
+
+            // illegal to read more than available in fifo, or more than 2
+            assume (i_rcount <= o_occupancy);
+            assume (i_rcount <= 2'h2);
+
+            // read pointer should increment by amount read
+            if (f_past_valid)
+                assert (rptr == $past(rptr + i_rcount));
+
+            // write pointer should increment by 0 or 2
+            if (f_past_valid)
+                assert (wptr == $past(wptr + (i_wen ? 2'h2 : 2'h0)));
+
+            // cover read and write pointer increment and wrap around
+            cover (f_past_valid && (rptr > $past(rptr)));
+            cover (f_past_valid && (rptr < $past(rptr)));
+            cover (f_past_valid && (rptr == $past(rptr)));
+            cover (f_past_valid && (wptr > $past(wptr)));
+            cover (f_past_valid && (wptr < $past(wptr)));
+            cover (f_past_valid && (wptr == $past(wptr)));
+
+            // cover reading and writing two instructions back to back
+            cover (f_past_valid && $past(i_wen) && $past(i_rcount == 2'h2) && i_wen && (i_rcount == 2'h2) && $changed(o_rdata0) && $changed(o_rdata1));
+        end
+    end
+`endif
+endmodule
+
+
 `default_nettype wire

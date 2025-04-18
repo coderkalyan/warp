@@ -15,14 +15,16 @@ smtbmc --nopresat --nounroll z3
 
 [script]
 verilog_defines -DWARP_FORMAL -DWARP_FORMAL_DEPTH=13
-read -formal warp_fetch.v warp_integer.v warp_decode.v warp_util.v
-prep -top warp_decode
-setundef -params -anyconst -undriven
+read -formal warp_fetch.v warp_integer.v warp_decode.v warp_issue.v warp_util.v
+prep -top warp_fifo
+# setundef -params -anyconst -undriven
+setundef -anyconst -undriven
 
 [files]
 rtl/warp_defines.v
 rtl/warp_fetch.v
 rtl/warp_decode.v
+rtl/warp_issue.v
 rtl/warp_integer.v
 rtl/warp_util.v
 # rtl/warp_formal.sv
