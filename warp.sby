@@ -5,11 +5,13 @@ cover
 [options]
 bmc:   mode bmc
 cover: mode cover
-depth 15
-multiclock on
+depth 31
+skip 30
+# multiclock on
 
 [engines]
-smtbmc --stbv z3
+# smtbmc boolector
+smtbmc --nopresat --nounroll z3
 
 [script]
 verilog_defines -DWARP_FORMAL -DWARP_FORMAL_DEPTH=13
