@@ -227,8 +227,6 @@ module warp_decode (
     initial f_past_valid <= 1'b0;
     always @(posedge i_clk) f_past_valid <= 1'b1;
 
-    (* gclk *) reg formal_timestep;
-
     initial assume (!i_clk);
     initial assume (!i_rst_n);
 
