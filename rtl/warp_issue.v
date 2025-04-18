@@ -8,8 +8,24 @@ module warp_issue (
     // receive zero or two instruction bundles per clock from the decode unit
     output wire        o_input_ready,
     input  wire        i_input_valid,
-    input  wire [`BUNDLE_SIZE - 1:0] i_bundle0,
-    input  wire [`BUNDLE_SIZE - 1:0] i_bundle1,
+    input  wire [63:0] i_pc_rdata0,
+    input  wire [63:0] i_pc_wdata0,
+    input  wire        i_legal0,
+    input  wire [14:0] i_raddr0,
+    input  wire [31:0] i_imm0,
+    input  wire [ 3:0] i_pipeline0,
+    input  wire [ 2:0] i_shared0,
+    input  wire [ 8:0] i_xarith0,
+    input  wire [ 6:0] i_xlogic0,
+    input  wire [63:0] i_pc_rdata1,
+    input  wire [63:0] i_pc_wdata1,
+    input  wire        i_legal1,
+    input  wire [14:0] i_raddr1,
+    input  wire [31:0] i_imm1,
+    input  wire [ 3:0] i_pipeline1,
+    input  wire [ 2:0] i_shared1,
+    input  wire [ 8:0] i_xarith1,
+    input  wire [ 6:0] i_xlogic1,
 `ifdef RISCV_FORMAL
     `RVFI_METADATA_INPUTS(_ch0),
     `RVFI_PC_INPUTS(_ch0),
@@ -125,27 +141,27 @@ module warp_issue (
             reservation <= next_reservation;
     end
 
-    // unpack parts of the instruction bundles to extract register address and
-    // pipeline destination
-    wire        bundle0_legal    = i_bundle0[ 0: 0];
-    wire [14:0] bundle0_raddr    = i_bundle0[15: 1];
-    wire [31:0] bundle0_imm32    = i_bundle0[47:16];
-    wire [ 3:0] bundle0_pipeline = i_bundle0[51:48];
-    wire [ 2:0] bundle0_shared   = i_bundle0[54:52];
-    wire [ 8:0] bundle0_xarith   = i_bundle0[63:55];
-    wire [ 6:0] bundle0_xlogic   = i_bundle0[70:64];
-    wire [63:0] bundle0_pc_rdata = i_bundle0[134:71];
-    wire [63:0] bundle0_pc_wdata = i_bundle0[198:135];
+    // naming conventions change here to improve readability inside the issue
+    // unit but to avoid changing toplevel and inputs, we just reassign
+    wire [63:0] bundle0_pc_rdata = i_pc_rdata0;
+    wire [63:0] bundle0_pc_wdata = i_pc_wdata0;
+    wire        bundle0_legal    = i_legal0;
+    wire [14:0] bundle0_raddr    = i_raddr0;
+    wire [31:0] bundle0_imm32    = i_imm0;
+    wire [ 3:0] bundle0_pipeline = i_pipeline0;
+    wire [ 2:0] bundle0_shared   = i_shared0;
+    wire [ 8:0] bundle0_xarith   = i_xarith0;
+    wire [ 6:0] bundle0_xlogic   = i_xlogic0;
 
-    wire        bundle1_legal    = i_bundle1[ 0: 0];
-    wire [14:0] bundle1_raddr    = i_bundle1[15: 1];
-    wire [31:0] bundle1_imm32    = i_bundle1[47:16];
-    wire [ 3:0] bundle1_pipeline = i_bundle1[51:48];
-    wire [ 2:0] bundle1_shared   = i_bundle1[54:52];
-    wire [ 8:0] bundle1_xarith   = i_bundle1[63:55];
-    wire [ 6:0] bundle1_xlogic   = i_bundle1[70:64];
-    wire [63:0] bundle1_pc_rdata = i_bundle1[134:71];
-    wire [63:0] bundle1_pc_wdata = i_bundle1[198:135];
+    wire [63:0] bundle1_pc_rdata = i_pc_rdata1;
+    wire [63:0] bundle1_pc_wdata = i_pc_wdata1;
+    wire        bundle1_legal    = i_legal1;
+    wire [14:0] bundle1_raddr    = i_raddr1;
+    wire [31:0] bundle1_imm32    = i_imm1;
+    wire [ 3:0] bundle1_pipeline = i_pipeline1;
+    wire [ 2:0] bundle1_shared   = i_shared1;
+    wire [ 8:0] bundle1_xarith   = i_xarith1;
+    wire [ 6:0] bundle1_xlogic   = i_xlogic1;
 
     // immediates are at most 32 bits in the instruction (actually less),
     // so sign extend them here to 64 bits
@@ -334,8 +350,10 @@ module warp_issue (
         endcase
     end
 
+`ifdef RISCV_FORMAL
     assign f_valid_xarith = (if_valid_ch0 && bundle0_dispatch_xarith && bundle0_transmit) || (if_valid_ch1 && bundle1_dispatch_xarith && bundle1_transmit);
     assign f_valid_xlogic = (if_valid_ch0 && bundle0_dispatch_xlogic && bundle0_transmit) || (if_valid_ch1 && bundle1_dispatch_xlogic && bundle1_transmit);
+`endif
 
     // when the first instruction is dispatched but the second isn't, the
     // issue unit stalls. however, to avoid re-dispatching the first
@@ -573,7 +591,6 @@ module warp_issue (
     assign o_xarith_valid         = r_xarith_valid;
 
     assign o_xlogic_banksel = r_xlogic_banksel;
-    assign o_xlogic_op1_sel = r_xlogic_op1_sel;
     assign o_xlogic_op2_sel = r_xlogic_op2_sel;
     assign o_xlogic_rd_wen  = r_xlogic_rd_wen;
     assign o_xlogic_imm     = r_xlogic_imm;
@@ -628,7 +645,7 @@ endmodule
 module warp_fifo #(
     parameter WIDTH = 1,
     parameter LOG_DEPTH = 2,
-    parameter DEPTH = 2 ** LOG_DEPTH,
+    parameter DEPTH = 2 ** LOG_DEPTH
 ) (
     input  wire               i_clk,
     input  wire               i_rst_n,
@@ -650,7 +667,7 @@ module warp_fifo #(
     // i_rcount shall not be greater than o_occupancy
     input  wire [1:0]         i_rcount,
     output wire [WIDTH - 1:0] o_rdata0,
-    output wire [WIDTH - 1:0] o_rdata1,
+    output wire [WIDTH - 1:0] o_rdata1
 );
     reg [WIDTH - 1:0] mem [0:DEPTH - 1];
     reg [LOG_DEPTH - 1:0] wptr, rptr;

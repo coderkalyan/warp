@@ -68,9 +68,12 @@ module warp_hart #(
         .of_pc_rdata_ch1(f_fetch_pc_rdata1),
         .of_pc_wdata_ch1(f_fetch_pc_wdata1),
 `endif
-        .o_inst0(fetch_inst0), .o_inst1(fetch_inst1),
-        .o_inst0_pc_rdata(fetch_inst0_pc_rdata), .o_inst1_pc_rdata(fetch_inst1_pc_rdata),
-        .o_inst0_pc_wdata(fetch_inst0_pc_wdata), .o_inst1_pc_wdata(fetch_inst1_pc_wdata),
+        .o_inst0(fetch_inst0),
+        .o_inst0_pc_rdata(fetch_inst0_pc_rdata),
+        .o_inst0_pc_wdata(fetch_inst0_pc_wdata),
+        .o_inst1(fetch_inst1),
+        .o_inst1_pc_rdata(fetch_inst1_pc_rdata),
+        .o_inst1_pc_wdata(fetch_inst1_pc_wdata),
         .o_compressed(fetch_compressed)
     );
 
@@ -82,9 +85,16 @@ module warp_hart #(
     assign imem_rdata = i_imem_rdata;
 
     // instruction decode
-    wire [31:0] decode_inst0, decode_inst1;
-    wire        decode_valid, issue_ready;
-    wire [`BUNDLE_SIZE - 1:0] decode_bundle0, decode_bundle1;
+    wire        issue_ready;
+    wire [63:0] decode_pc_rdata   [1:0];
+    wire [63:0] decode_pc_wdata   [1:0];
+    wire        decode_legal      [1:0];
+    wire [14:0] decode_raddr      [1:0];
+    wire [31:0] decode_imm        [1:0];
+    wire [ 3:0] decode_pipeline   [1:0];
+    wire [ 2:0] decode_shared     [1:0];
+    wire [ 8:0] decode_xarith     [1:0];
+    wire [ 6:0] decode_xlogic     [1:0];
 `ifdef RISCV_FORMAL
     wire        f_decode_valid0;
     wire [63:0] f_decode_order0;
@@ -166,7 +176,24 @@ module warp_hart #(
         .of_rd_wdata_ch1(f_decode_rd_wdata1),
 `endif
         .i_stall(!issue_ready),
-        .o_bundle0(decode_bundle0), .o_bundle1(decode_bundle1)
+        .o_pc_rdata0(decode_pc_rdata[0]),
+        .o_pc_wdata0(decode_pc_wdata[0]),
+        .o_legal0(decode_legal[0]),
+        .o_raddr0(decode_raddr[0]),
+        .o_imm0(decode_imm[0]),
+        .o_pipeline0(decode_pipeline[0]),
+        .o_shared0(decode_shared[0]),
+        .o_xarith0(decode_xarith[0]),
+        .o_xlogic0(decode_xlogic[0]),
+        .o_pc_rdata1(decode_pc_rdata[1]),
+        .o_pc_wdata1(decode_pc_wdata[1]),
+        .o_legal1(decode_legal[1]),
+        .o_raddr1(decode_raddr[1]),
+        .o_imm1(decode_imm[1]),
+        .o_pipeline1(decode_pipeline[1]),
+        .o_shared1(decode_shared[1]),
+        .o_xarith1(decode_xarith[1]),
+        .o_xlogic1(decode_xlogic[1])
     );
 
     wire [ 4:0] rs1_addr, rs2_addr, rs3_addr, rs4_addr;
@@ -210,8 +237,24 @@ module warp_hart #(
         .i_clk(i_clk), .i_rst_n(i_rst_n),
         .o_input_ready(issue_ready),
         .i_input_valid(1'b1),
-        .i_bundle0(decode_bundle0),
-        .i_bundle1(decode_bundle1),
+        .i_pc_rdata0(decode_pc_rdata[0]),
+        .i_pc_wdata0(decode_pc_wdata[0]),
+        .i_legal0(decode_legal[0]),
+        .i_raddr0(decode_raddr[0]),
+        .i_imm0(decode_imm[0]),
+        .i_pipeline0(decode_pipeline[0]),
+        .i_shared0(decode_shared[0]),
+        .i_xarith0(decode_xarith[0]),
+        .i_xlogic0(decode_xlogic[0]),
+        .i_pc_rdata1(decode_pc_rdata[1]),
+        .i_pc_wdata1(decode_pc_wdata[1]),
+        .i_legal1(decode_legal[1]),
+        .i_raddr1(decode_raddr[1]),
+        .i_imm1(decode_imm[1]),
+        .i_pipeline1(decode_pipeline[1]),
+        .i_shared1(decode_shared[1]),
+        .i_xarith1(decode_xarith[1]),
+        .i_xlogic1(decode_xlogic[1]),
 `ifdef RISCV_FORMAL
         .if_valid_ch0(f_decode_valid0),
         .if_order_ch0(f_decode_order0),

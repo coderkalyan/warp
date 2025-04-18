@@ -3,10 +3,10 @@
 module warp_hart_tb ();
     logic clk, rst_n;
     logic imem_ren, imem_valid;
-    logic [38:0] imem_raddr;
+    logic [63:0] imem_raddr;
     logic [63:0] imem_rdata;
 
-    warp_hart #(.RESET_ADDR(39'h4000000000)) hart (
+    warp_hart #(.RESET_ADDR(64'h8000000000)) hart (
         .i_clk(clk),
         .i_rst_n(rst_n),
         .o_imem_ren(imem_ren),

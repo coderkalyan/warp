@@ -119,7 +119,6 @@ def main():
 
     # misc hardcoded defines
     s += "`define CANONICAL_NOP 32'h00000013\n"
-    s += "`define BUNDLE_SIZE 199\n"
     s += "\n"
 
     s += "`endif /* WARP_DEFINES */\n"
