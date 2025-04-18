@@ -166,7 +166,7 @@ module warp_fetch #(
     wire [63:0] inst0_pc_rdata = pc;
     wire [63:0] inst0_pc_wdata = compressed[0] ? (pc + 64'h2) : (pc + 64'h4);
     wire [63:0] inst1_pc_rdata = inst0_pc_wdata;
-    wire [63:0] inst1_pc_wdata = next_pc;
+    wire [63:0] inst1_pc_wdata = advance_pc;
 
     // request the next pc address from the cache, which
     // automatically handles stalling by re-fetching the
@@ -185,7 +185,7 @@ module warp_fetch #(
     assign o_inst0_pc_wdata = inst0_pc_wdata;
     assign o_inst1_pc_rdata = inst1_pc_rdata;
     assign o_inst1_pc_wdata = inst1_pc_wdata;
-    assign o_compressed = compressed & {inst1_valid, inst0_valid};
+    assign o_compressed = compressed & inst_valid;
 
 `ifdef RISCV_FORMAL
     reg [63:0] f_order;
@@ -196,7 +196,7 @@ module warp_fetch #(
             f_order <= count ? 64'h2 : 64'h1;
     end
 
-    assign of_valid_ch0 = inst0_valid;
+    assign of_valid_ch0 = inst_valid[0];
     assign of_order_ch0 = f_order;
     assign of_insn_ch0  = compressed[0] ? {16'h0, o_inst0[15:0]} : o_inst0;
     assign of_trap_ch0  = 1'b0; // only set by decode stage and later
@@ -207,7 +207,7 @@ module warp_fetch #(
     assign of_pc_rdata_ch0 = inst0_pc_rdata;
     assign of_pc_wdata_ch0 = inst0_pc_wdata;
 
-    assign of_valid_ch1 = inst1_valid;
+    assign of_valid_ch1 = inst_valid[1];
     assign of_order_ch1 = f_order + 64'h1;
     assign of_insn_ch1  = compressed[1] ? {16'h0, o_inst1[15:0]} : o_inst1;
     assign of_trap_ch1  = 1'b0; // only set by decode stage and later

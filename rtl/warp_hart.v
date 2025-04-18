@@ -21,7 +21,7 @@ module warp_hart #(
     wire [63:0] imem_rdata;
     wire        branch_valid;
     wire [63:0] branch_target;
-    wire        decode_ready;
+    wire        decode_stall;
     wire [31:0] fetch_inst0, fetch_inst1;
     wire [63:0] fetch_inst0_pc_rdata, fetch_inst1_pc_rdata;
     wire [63:0] fetch_inst0_pc_wdata, fetch_inst1_pc_wdata;
@@ -45,7 +45,7 @@ module warp_hart #(
         .o_imem_ren(imem_ren), .o_imem_raddr(imem_raddr),
         .i_imem_valid(imem_valid), .i_imem_rdata(imem_rdata),
         .i_branch_valid(branch_valid), .i_branch_target(branch_target),
-        .i_stall(!decode_ready),
+        .i_stall(decode_stall),
 `ifdef RISCV_FORMAL
         .of_valid_ch0(f_fetch_valid0),
         .of_order_ch0(f_fetch_order0),
@@ -105,7 +105,7 @@ module warp_hart #(
 `endif
     warp_decode decode (
         .i_clk(i_clk), .i_rst_n(i_rst_n),
-        .o_input_ready(decode_ready), .i_input_valid(1'b1),
+        .o_stall(decode_stall),
         .i_inst0(fetch_inst0), .i_inst1(fetch_inst1),
         .i_inst0_pc_rdata(fetch_inst0_pc_rdata), .i_inst1_pc_rdata(fetch_inst1_pc_rdata),
         .i_inst0_pc_wdata(fetch_inst0_pc_wdata), .i_inst1_pc_wdata(fetch_inst1_pc_wdata),
@@ -165,7 +165,7 @@ module warp_hart #(
         .of_rs2_rdata_ch1(f_decode_rs2_rdata1),
         .of_rd_wdata_ch1(f_decode_rd_wdata1),
 `endif
-        .i_output_ready(issue_ready), .o_output_valid(decode_valid),
+        .i_stall(!issue_ready),
         .o_bundle0(decode_bundle0), .o_bundle1(decode_bundle1)
     );
 
@@ -209,7 +209,7 @@ module warp_hart #(
     warp_issue issue (
         .i_clk(i_clk), .i_rst_n(i_rst_n),
         .o_input_ready(issue_ready),
-        .i_input_valid(decode_valid),
+        .i_input_valid(1'b1),
         .i_bundle0(decode_bundle0),
         .i_bundle1(decode_bundle1),
 `ifdef RISCV_FORMAL
