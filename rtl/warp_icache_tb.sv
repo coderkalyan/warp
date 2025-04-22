@@ -68,6 +68,7 @@ module warp_icache_tb ();
             ahb_hrdata <= memory[ahb_haddr >> 3];
     end
 
+    integer i;
     initial begin
         $dumpfile("warp_icache_tb.vcd");
         $dumpvars(0, warp_icache_tb);
@@ -82,14 +83,17 @@ module warp_icache_tb ();
         #10;
         rst_n = 1;
 
-        @(posedge clk);
+        @(posedge clk); #0;
 
         // first transaction at address 0x00
         req_raddr = 64'h00;
         req_valid = 1;
 
-        @(posedge clk);
+        @(posedge clk); #0;
         req_valid = 0;
+
+        // for (i = 0; i < 10; i = i + 1)
+        //     @(posedge clk);
 
         @(posedge res_valid);
         // while (ahb_htrans != HTRANS_IDLE)
@@ -102,7 +106,7 @@ module warp_icache_tb ();
         @(posedge clk);
         req_valid = 0;
 
-        @(posedge res_valid);
+        // @(posedge res_valid);
         // while (ahb_htrans != HTRANS_IDLE)
         //     @(posedge clk);
 

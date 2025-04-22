@@ -5,8 +5,8 @@ cover
 [options]
 bmc:   mode bmc
 cover: mode cover
-depth 31
-skip 30
+depth 11
+skip 10
 # multiclock on
 
 [engines]
@@ -15,8 +15,8 @@ smtbmc --nopresat --nounroll z3
 
 [script]
 verilog_defines -DWARP_FORMAL -DWARP_FORMAL_DEPTH=13
-read -formal warp_fetch.v warp_integer.v warp_decode.v warp_issue.v warp_util.v
-prep -top warp_fifo
+read -formal warp_fetch.v warp_integer.v warp_decode.v warp_issue.v warp_util.v warp_memory.v
+prep -top warp_icache
 # setundef -params -anyconst -undriven
 setundef -anyconst -undriven
 
@@ -27,4 +27,4 @@ rtl/warp_decode.v
 rtl/warp_issue.v
 rtl/warp_integer.v
 rtl/warp_util.v
-# rtl/warp_formal.sv
+rtl/warp_memory.v

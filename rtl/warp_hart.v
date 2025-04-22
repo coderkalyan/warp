@@ -7,18 +7,63 @@ module warp_hart #(
 ) (
     input  wire        i_clk,
     input  wire        i_rst_n,
-    output wire        o_imem_ren,
-    output wire [63:0] o_imem_raddr,
-    input  wire        i_imem_valid,
-    input  wire [63:0] i_imem_rdata
+    // output wire        o_imem_ren,
+    // output wire [63:0] o_imem_raddr,
+    // input  wire        i_imem_valid,
+    // input  wire [63:0] i_imem_rdata
+    output wire        o_ahb1_hclk,
+    output wire        o_ahb1_hreset_n,
+    output wire [63:0] o_ahb1_haddr,
+    output wire [2:0]  o_ahb1_hburst,
+    output wire        o_ahb1_hmastlock,
+    output wire [3:0]  o_ahb1_hprot,
+    output wire [2:0]  o_ahb1_hsize,
+    output wire        o_ahb1_hnonsec,
+    output wire        o_ahb1_hexcl,
+    output wire [1:0]  o_ahb1_htrans,
+    output wire [63:0] o_ahb1_hwdata,
+    output wire [7:0]  o_ahb1_hwstrb,
+    output wire        o_ahb1_hwrite,
+    input  wire [63:0] i_ahb1_hrdata,
+    input  wire        i_ahb1_hready,
+    input  wire        i_ahb1_hresp,
+    input  wire        i_ahb1_hexokay
     `ifdef RISCV_FORMAL
         ,`RVFI_OUTPUTS
     `endif
 );
+    // private instruction cache
+    wire        imem_req_valid;
+    wire [63:0] imem_req_raddr;
+    wire        imem_res_valid;
+    wire [63:0] imem_res_rdata;
+    warp_icache icache (
+        .i_clk(i_clk),
+        .i_rst_n(i_rst_n),
+        .i_req_valid(imem_req_valid),
+        .i_req_raddr(imem_req_raddr),
+        .o_res_valid(imem_res_valid),
+        .o_res_rdata(imem_res_rdata),
+        .o_ahb_hclk(o_ahb1_hclk),
+        .o_ahb_hreset_n(o_ahb1_hreset_n),
+        .o_ahb_haddr(o_ahb1_haddr),
+        .o_ahb_hburst(o_ahb1_hburst),
+        .o_ahb_hmastlock(o_ahb1_hmastlock),
+        .o_ahb_hprot(o_ahb1_hprot),
+        .o_ahb_hsize(o_ahb1_hsize),
+        .o_ahb_hnonsec(o_ahb1_hnonsec),
+        .o_ahb_hexcl(o_ahb1_hexcl),
+        .o_ahb_htrans(o_ahb1_htrans),
+        .o_ahb_hwdata(o_ahb1_hwdata),
+        .o_ahb_hwstrb(o_ahb1_hwstrb),
+        .o_ahb_hwrite(o_ahb1_hwrite),
+        .i_ahb_hrdata(i_ahb1_hrdata),
+        .i_ahb_hready(i_ahb1_hready),
+        .i_ahb_hresp(i_ahb1_hresp),
+        .i_ahb_hexokay(i_ahb1_hexokay)
+    );
+
     // instruction fetch
-    wire        imem_ren, imem_valid;
-    wire [63:0] imem_raddr;
-    wire [63:0] imem_rdata;
     wire        branch_valid;
     wire [63:0] branch_target;
     wire        decode_stall;
@@ -41,10 +86,14 @@ module warp_hart #(
     wire [63:0] f_fetch_pc_rdata1, f_fetch_pc_wdata1;
 `endif
     warp_fetch fetch (
-        .i_clk(i_clk), .i_rst_n(i_rst_n),
-        .o_imem_ren(imem_ren), .o_imem_raddr(imem_raddr),
-        .i_imem_valid(imem_valid), .i_imem_rdata(imem_rdata),
-        .i_branch_valid(branch_valid), .i_branch_target(branch_target),
+        .i_clk(i_clk),
+        .i_rst_n(i_rst_n),
+        .o_imem_ren(imem_req_valid),
+        .o_imem_raddr(imem_req_raddr),
+        .i_imem_valid(imem_res_valid),
+        .i_imem_rdata(imem_res_rdata),
+        .i_branch_valid(branch_valid),
+        .i_branch_target(branch_target),
         .i_stall(decode_stall),
 `ifdef RISCV_FORMAL
         .of_valid_ch0(f_fetch_valid0),
