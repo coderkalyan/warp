@@ -100,4 +100,9 @@
 
 `define CANONICAL_NOP 32'h00000013
 
-`endif /* WARP_DEFINES */
+`define XSHIFT_OP_SHL 2'b00
+`define XSHIFT_OP_SHR 2'b01
+`define XSHIFT_OP_ROL 2'b10
+`define XSHIFT_OP_ROR 2'b11
+
+`endif
